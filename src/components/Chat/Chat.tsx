@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useChatStore } from '../../stores/useChatStore';
 import type { Attachment } from '../../stores/useChatStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { MessageRenderer } from './MessageRenderer';
 import { Composer } from './Composer';
+import { SchemaWorkspace } from '../StructuredOutput/SchemaWorkspace';
 import { streamChatCompletions } from '../../api/client';
+import { ToggleRight, ToggleLeft } from 'lucide-react';
 import './Chat.css';
 
 export function Chat() {
@@ -25,6 +27,40 @@ export function Chat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages.length, messages[messages.length - 1]?.content]);
+
+  // Derive generated schema for the request
+  const generatedSchema = useMemo(() => {
+    if (!settings.structuredOutputMode) return undefined;
+    const properties: Record<string, any> = {};
+    const required: string[] = [];
+
+    settings.schemaFields.forEach(field => {
+      properties[field.name] = {
+        type: field.type,
+        description: field.description
+      };
+      if (field.type === 'array') {
+        properties[field.name].items = { type: 'string' };
+      }
+      if (field.required) {
+        required.push(field.name);
+      }
+    });
+
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: "user_defined_schema",
+        strict: true,
+        schema: {
+          type: "object",
+          properties,
+          required,
+          additionalProperties: false
+        }
+      }
+    };
+  }, [settings.structuredOutputMode, settings.schemaFields]);
 
   const handleSend = async (content: string, attachments: Attachment[]) => {
     if (!activeChatId) return;
@@ -76,7 +112,7 @@ export function Chat() {
       const generator = streamChatCompletions(
         currentMessages,
         undefined, 
-        settings.structuredOutputMode ? undefined : undefined, // schema handled later
+        generatedSchema,
         abortControllerRef.current.signal
       );
 
@@ -110,40 +146,57 @@ export function Chat() {
     );
   }
 
-  // Find the last user message and the last assistant message indices to enable regeneration safely
   const isMessageLastAssistantMsg = (msgId: string) => {
      if (messages.length === 0) return false;
      return messages[messages.length - 1].id === msgId && messages[messages.length - 1].role === 'assistant';
   };
 
   return (
-    <div className="chat-container">
-      <div className="chat-messages-area">
-        {messages.length === 0 ? (
-          <div className="chat-welcome">
-            <h2>How can I help you today?</h2>
-          </div>
-        ) : (
-          <div className="messages-list">
-            {messages.map((msg) => (
-              <MessageRenderer 
-                key={msg.id} 
-                message={msg} 
-                onRegenerate={isMessageLastAssistantMsg(msg.id) && !isGenerating ? handleRegenerate : undefined}
-                onEdit={msg.role === 'user' && !isGenerating ? (content) => handleEdit(msg.id, content) : undefined}
-              />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+    <div className={`chat-layout ${settings.structuredOutputMode ? 'with-sidebar' : ''}`}>
+      <div className="chat-container">
+        
+        <div className="chat-header">
+           <h3 className="chat-title truncate">{activeChat.title}</h3>
+           <button 
+             className="mode-toggle-btn" 
+             onClick={() => settings.setSettings({ structuredOutputMode: !settings.structuredOutputMode })}
+           >
+             {settings.structuredOutputMode ? <ToggleRight size={20} className="active-toggle" /> : <ToggleLeft size={20} />}
+             <span>Structured Output</span>
+           </button>
+        </div>
+
+        <div className="chat-messages-area">
+          {messages.length === 0 ? (
+            <div className="chat-welcome">
+              <h2>How can I help you today?</h2>
+            </div>
+          ) : (
+            <div className="messages-list">
+              {messages.map((msg) => (
+                <MessageRenderer 
+                  key={msg.id} 
+                  message={msg} 
+                  onRegenerate={isMessageLastAssistantMsg(msg.id) && !isGenerating ? handleRegenerate : undefined}
+                  onEdit={msg.role === 'user' && !isGenerating ? (content) => handleEdit(msg.id, content) : undefined}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+        <div className="chat-composer-area">
+          <Composer 
+            onSend={handleSend} 
+            onStop={handleStop} 
+            isGenerating={isGenerating} 
+          />
+        </div>
       </div>
-      <div className="chat-composer-area">
-        <Composer 
-          onSend={handleSend} 
-          onStop={handleStop} 
-          isGenerating={isGenerating} 
-        />
-      </div>
+      
+      {settings.structuredOutputMode && (
+         <SchemaWorkspace />
+      )}
     </div>
   );
 }
