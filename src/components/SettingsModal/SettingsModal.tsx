@@ -7,13 +7,23 @@ export function SettingsModal() {
   const [isOpen, setIsOpen] = useState(false);
   const settings = useSettingsStore();
 
-  const [localSettings, setLocalSettings] = useState({
-    apiKey: settings.apiKey,
-    baseUrl: settings.baseUrl,
-    model: settings.model,
+  type LocalSettingsDraft = {
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+    temperature: number;
+    topP: number;
+    maxTokens: number | '';
+  };
+
+  // Mask stored config values in the UI by not pre-filling text inputs.
+  const [localSettings, setLocalSettings] = useState<LocalSettingsDraft>({
+    apiKey: '',
+    baseUrl: '',
+    model: '',
     temperature: settings.temperature,
     topP: settings.topP,
-    maxTokens: settings.maxTokens,
+    maxTokens: '',
   });
 
   const isModalOpen = isOpen || !settings.apiKey;
@@ -21,12 +31,12 @@ export function SettingsModal() {
   useEffect(() => {
     const handleOpen = () => {
       setLocalSettings({
-        apiKey: settings.apiKey,
-        baseUrl: settings.baseUrl,
-        model: settings.model,
+        apiKey: '',
+        baseUrl: '',
+        model: '',
         temperature: settings.temperature,
         topP: settings.topP,
-        maxTokens: settings.maxTokens,
+        maxTokens: '',
       });
       setIsOpen(true);
     };
@@ -39,13 +49,33 @@ export function SettingsModal() {
     const { name, value, type } = e.target;
     setLocalSettings(prev => ({
       ...prev,
-      [name]: type === 'number' || type === 'range' ? Number(value) : value
+      [name]:
+        name === 'maxTokens' && value === ''
+          ? ''
+          : type === 'number' || type === 'range'
+            ? Number(value)
+            : value,
     }));
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    settings.setSettings(localSettings);
+
+    const mergedSettings = {
+      apiKey: localSettings.apiKey || settings.apiKey,
+      baseUrl: localSettings.baseUrl || settings.baseUrl,
+      model: localSettings.model || settings.model,
+      temperature: localSettings.temperature,
+      topP: localSettings.topP,
+      maxTokens: localSettings.maxTokens === '' ? settings.maxTokens : localSettings.maxTokens,
+    };
+
+    if (!mergedSettings.apiKey) {
+      alert('Please enter an API Key.');
+      return;
+    }
+
+    settings.setSettings(mergedSettings);
     setIsOpen(false);
   };
 
@@ -77,9 +107,8 @@ export function SettingsModal() {
               type="url" 
               id="baseUrl" 
               name="baseUrl" 
-              value={localSettings.baseUrl} 
+              value={localSettings.baseUrl}
               onChange={handleChange}
-              required 
               placeholder="https://api.openai.com/v1"
             />
           </div>
@@ -90,9 +119,8 @@ export function SettingsModal() {
               type="password" 
               id="apiKey" 
               name="apiKey" 
-              value={localSettings.apiKey} 
+              value={localSettings.apiKey}
               onChange={handleChange}
-              required 
               placeholder="sk-..."
             />
           </div>
@@ -103,9 +131,8 @@ export function SettingsModal() {
               type="text" 
               id="model" 
               name="model" 
-              value={localSettings.model} 
+              value={localSettings.model}
               onChange={handleChange}
-              required 
               placeholder="gpt-4o, llama-3, etc."
             />
           </div>
@@ -147,8 +174,9 @@ export function SettingsModal() {
               id="maxTokens" 
               name="maxTokens" 
               min="1" max="32768" 
-              value={localSettings.maxTokens} 
+              value={localSettings.maxTokens}
               onChange={handleChange}
+              placeholder="4096"
             />
           </div>
 
