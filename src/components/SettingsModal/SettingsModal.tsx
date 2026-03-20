@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, AlertCircle } from 'lucide-react';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import { mergeMaskedSettings, type MaskedSettingsDraft } from '../../utils/settingsMasking';
 import './SettingsModal.css';
 
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useState(false);
   const settings = useSettingsStore();
 
-  type LocalSettingsDraft = {
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-    temperature: number;
-    topP: number;
-    maxTokens: number | '';
-  };
-
   // Mask stored config values in the UI by not pre-filling text inputs.
-  const [localSettings, setLocalSettings] = useState<LocalSettingsDraft>({
+  const [localSettings, setLocalSettings] = useState<MaskedSettingsDraft>({
     apiKey: '',
     baseUrl: '',
     model: '',
@@ -61,21 +53,24 @@ export function SettingsModal() {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const mergedSettings = {
-      apiKey: localSettings.apiKey || settings.apiKey,
-      baseUrl: localSettings.baseUrl || settings.baseUrl,
-      model: localSettings.model || settings.model,
-      temperature: localSettings.temperature,
-      topP: localSettings.topP,
-      maxTokens: localSettings.maxTokens === '' ? settings.maxTokens : localSettings.maxTokens,
-    };
+    const result = mergeMaskedSettings({
+      stored: {
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        model: settings.model,
+        temperature: settings.temperature,
+        topP: settings.topP,
+        maxTokens: settings.maxTokens,
+      },
+      draft: localSettings,
+    });
 
-    if (!mergedSettings.apiKey) {
-      alert('Please enter an API Key.');
+    if ('error' in result) {
+      alert(result.error);
       return;
     }
 
-    settings.setSettings(mergedSettings);
+    settings.setSettings(result.merged);
     setIsOpen(false);
   };
 
