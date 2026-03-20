@@ -178,6 +178,13 @@
     align-items: center;
     justify-content: center;
   }
+
+  /* Sidebar overlay is conditionally rendered when `isOpen` is true.
+   * The DOM order means the previous sibling selector won't work reliably,
+   * so we show it directly on mobile. */
+  .sidebar-overlay {
+    display: block;
+  }
   
   .sidebar-toggle.open {
     left: calc(var(--sidebar-width) + 1rem);
@@ -193,9 +200,5 @@
   .sidebar.open {
     transform: translateX(0);
     box-shadow: var(--shadow-lg);
-  }
-
-  .sidebar.open + .sidebar-overlay {
-    display: block;
   }
 }
