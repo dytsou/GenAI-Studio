@@ -205,7 +205,7 @@ export function Chat() {
       </div>
       
       {settings.structuredOutputMode && (
-         <SchemaWorkspace />
+         <SchemaWorkspace onClose={() => settings.setSettings({ structuredOutputMode: false })} />
       )}
     </div>
   );

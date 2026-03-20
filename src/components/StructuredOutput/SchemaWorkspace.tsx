@@ -1,17 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import type { SchemaField } from '../../stores/useSettingsStore';
 import { useChatStore } from '../../stores/useChatStore';
-import { Plus, Trash2, Download, Table2 } from 'lucide-react';
+import { Plus, Trash2, Download, Table2, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './SchemaWorkspace.css';
 
-export function SchemaWorkspace() {
+export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
   const { schemaFields, setSchemaFields } = useSettingsStore();
   const { chats, activeChatId } = useChatStore();
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages;
+
+  const [editDraft, setEditDraft] = useState<SchemaField | null>(null);
 
   const handleAddField = () => {
     setSchemaFields([...schemaFields, {
@@ -29,6 +31,19 @@ export function SchemaWorkspace() {
 
   const handleDeleteField = (id: string) => {
     setSchemaFields(schemaFields.filter(f => f.id !== id));
+  };
+
+  const openEdit = (field: SchemaField) => {
+    setEditDraft({ ...field });
+  };
+
+  const closeEdit = () => setEditDraft(null);
+
+  const saveEdit = () => {
+    if (!editDraft) return;
+    const { id, ...updates } = editDraft;
+    handleUpdateField(id, updates);
+    closeEdit();
   };
 
   const generatedSchema = useMemo(() => {
@@ -119,7 +134,15 @@ export function SchemaWorkspace() {
   return (
     <div className="schema-workspace">
       <div className="schema-header">
-        <h3>Schema Builder</h3>
+        <h3 className="schema-title">Schema Builder</h3>
+        <button
+          className="schema-close-btn"
+          onClick={onClose}
+          aria-label="Close structured output"
+          type="button"
+        >
+          <X size={16} />
+        </button>
         <button className="add-field-btn" onClick={handleAddField}>
           <Plus size={16} /> Add Field
         </button>
@@ -183,6 +206,27 @@ export function SchemaWorkspace() {
         </table>
       </div>
 
+      <div className="schema-mobile-list">
+        {schemaFields.map((field) => (
+          <div key={field.id} className="schema-mobile-row">
+            <div className="schema-mobile-meta">
+              <div className="schema-mobile-name" title={field.name}>
+                {field.name}
+              </div>
+              <div className="schema-mobile-sub">
+                <span className="schema-pill">{field.type}</span>
+                <span className="schema-pill">
+                  {field.required ? 'Required' : 'Optional'}
+                </span>
+              </div>
+            </div>
+            <button type="button" className="schema-edit-btn" onClick={() => openEdit(field)}>
+              Edit
+            </button>
+          </div>
+        ))}
+      </div>
+
       <div className="schema-preview">
         <h4>JSON Preview</h4>
         <pre>{JSON.stringify(generatedSchema.json_schema.schema, null, 2)}</pre>
@@ -200,6 +244,108 @@ export function SchemaWorkspace() {
           </button>
         </div>
       </div>
+
+      {editDraft && (
+        <div
+          className="schema-edit-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={closeEdit}
+        >
+          <div className="schema-edit-popout" onClick={(e) => e.stopPropagation()}>
+            <div className="schema-edit-header">
+              <h4>Edit Property</h4>
+              <button
+                className="schema-edit-close"
+                onClick={closeEdit}
+                aria-label="Close edit"
+                type="button"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveEdit();
+              }}
+              className="schema-edit-form"
+            >
+              <label className="schema-edit-label">
+                Property
+                <input
+                  type="text"
+                  value={editDraft.name}
+                  onChange={(e) => setEditDraft((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+                />
+              </label>
+
+              <label className="schema-edit-label">
+                Type
+                <select
+                  value={editDraft.type}
+                  onChange={(e) =>
+                    setEditDraft((prev) =>
+                      prev ? { ...prev, type: e.target.value as SchemaField['type'] } : prev
+                    )
+                  }
+                >
+                  <option value="string">Str</option>
+                  <option value="number">Num</option>
+                  <option value="boolean">Bool</option>
+                  <option value="array">Arr</option>
+                  <option value="object">Obj</option>
+                </select>
+              </label>
+
+              <label className="schema-edit-label schema-edit-checkbox">
+                <input
+                  type="checkbox"
+                  checked={editDraft.required}
+                  onChange={(e) => setEditDraft((prev) => (prev ? { ...prev, required: e.target.checked } : prev))}
+                />
+                Required
+              </label>
+
+              <label className="schema-edit-label">
+                Description
+                <input
+                  type="text"
+                  value={editDraft.description}
+                  onChange={(e) =>
+                    setEditDraft((prev) =>
+                      prev ? { ...prev, description: e.target.value } : prev
+                    )
+                  }
+                />
+              </label>
+
+              <div className="schema-edit-actions">
+                <button
+                  type="button"
+                  className="schema-delete-edit-btn"
+                  onClick={() => {
+                    handleDeleteField(editDraft.id);
+                    closeEdit();
+                  }}
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+
+                <div className="schema-edit-actions-right">
+                  <button type="button" className="schema-cancel-edit-btn" onClick={closeEdit}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="schema-save-edit-btn">
+                    Save
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
