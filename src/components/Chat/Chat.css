@@ -107,4 +107,14 @@
   .chat-composer-area {
     padding: 1rem;
   }
+
+  /* Prevent the mobile sidebar toggle from overlapping the active chat title. */
+  .chat-header .chat-title {
+    display: none;
+  }
+
+  /* Align mode toggle to the right when title is hidden. */
+  .mode-toggle-btn {
+    margin-left: auto;
+  }
 }
