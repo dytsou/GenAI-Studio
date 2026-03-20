@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
-import { useSettingsStore, SchemaField } from '../../stores/useSettingsStore';
+import { useMemo } from 'react';
+import { useSettingsStore } from '../../stores/useSettingsStore';
+import type { SchemaField } from '../../stores/useSettingsStore';
 import { useChatStore } from '../../stores/useChatStore';
 import { Plus, Trash2, Download, Table2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
