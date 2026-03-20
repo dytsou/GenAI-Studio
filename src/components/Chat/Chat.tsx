@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useChatStore } from '../../stores/useChatStore';
 import type { Attachment } from '../../stores/useChatStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
+import type { SchemaField } from '../../stores/useSettingsStore';
 import { MessageRenderer } from './MessageRenderer';
 import { Composer } from './Composer';
 import { SchemaWorkspace } from '../StructuredOutput/SchemaWorkspace';
@@ -31,7 +32,13 @@ export function Chat() {
   // Derive generated schema for the request
   const generatedSchema = useMemo(() => {
     if (!settings.structuredOutputMode) return undefined;
-    const properties: Record<string, any> = {};
+    type JsonSchemaProperty = {
+      type: SchemaField['type'];
+      description: string;
+      items?: { type: 'string' };
+    };
+
+    const properties: Record<string, JsonSchemaProperty> = {};
     const required: string[] = [];
 
     settings.schemaFields.forEach(field => {
@@ -121,8 +128,9 @@ export function Chat() {
         fullContent += chunk;
         updateMessage(activeChatId, lastMsg.id, { content: fullContent });
       }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
+    } catch (err: unknown) {
+      const maybeError = err as { name?: unknown };
+      if (maybeError.name !== 'AbortError') {
         updateMessage(activeChatId, lastMsg.id, { error: true });
         console.error(err);
       }

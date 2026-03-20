@@ -16,28 +16,23 @@ export function SettingsModal() {
     maxTokens: settings.maxTokens,
   });
 
+  const isModalOpen = isOpen || !settings.apiKey;
+
   useEffect(() => {
-    const handleOpen = () => setIsOpen(true);
-    window.addEventListener('open-settings', handleOpen);
-    
-    // Auto open if no API key is set
-    if (!settings.apiKey) {
+    const handleOpen = () => {
+      setLocalSettings({
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        model: settings.model,
+        temperature: settings.temperature,
+        topP: settings.topP,
+        maxTokens: settings.maxTokens,
+      });
       setIsOpen(true);
-    }
-    
+    };
+    window.addEventListener('open-settings', handleOpen);
+
     return () => window.removeEventListener('open-settings', handleOpen);
-  }, [settings.apiKey]);
-  
-  // Sync state when store changes externally (e.g. on mount)
-  useEffect(() => {
-    setLocalSettings({
-      apiKey: settings.apiKey,
-      baseUrl: settings.baseUrl,
-      model: settings.model,
-      temperature: settings.temperature,
-      topP: settings.topP,
-      maxTokens: settings.maxTokens,
-    });
   }, [settings]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,7 +49,7 @@ export function SettingsModal() {
     setIsOpen(false);
   };
 
-  if (!isOpen) return null;
+  if (!isModalOpen) return null;
 
   return (
     <div className="modal-overlay">

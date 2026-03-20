@@ -32,7 +32,13 @@ export function SchemaWorkspace() {
   };
 
   const generatedSchema = useMemo(() => {
-    const properties: any = {};
+    type JsonSchemaProperty = {
+      type: SchemaField['type'];
+      description: string;
+      items?: { type: 'string' };
+    };
+
+    const properties: Record<string, JsonSchemaProperty> = {};
     const required: string[] = [];
 
     schemaFields.forEach(field => {
@@ -94,11 +100,12 @@ export function SchemaWorkspace() {
   };
 
   const exportCsv = () => {
-    if (!isArrayResponse || parsedJson.length === 0) return;
-    const keys = Object.keys(parsedJson[0]);
+    if (!isArrayResponse || !parsedJson || parsedJson.length === 0) return;
+    const rows = parsedJson as Array<Record<string, unknown>>;
+    const keys = Object.keys(rows[0] || {});
     const csvRows = [
       keys.join(','),
-      ...parsedJson.map((row: any) => keys.map((k: string) => JSON.stringify(row[k] ?? '')).join(','))
+      ...rows.map((row) => keys.map((k: string) => JSON.stringify(row[k] ?? '')).join(','))
     ];
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -141,7 +148,7 @@ export function SchemaWorkspace() {
                 <td>
                   <select 
                     value={field.type}
-                    onChange={e => handleUpdateField(field.id, { type: e.target.value as any })}
+                    onChange={e => handleUpdateField(field.id, { type: e.target.value as SchemaField['type'] })}
                   >
                     <option value="string">Str</option>
                     <option value="number">Num</option>

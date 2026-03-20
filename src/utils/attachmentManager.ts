@@ -21,7 +21,6 @@ export async function processFile(file: File): Promise<Attachment[]> {
         throw new Error(`PDF size exceeds 50MB limit: ${file.name}`);
      }
      // Dynamic import so we don't load pdfjs until needed
-     // @ts-ignore
      const { processPdfToImages } = await import('./pdfProcessor');
      return await processPdfToImages(file);
   }
