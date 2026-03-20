@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Square, Paperclip, X } from 'lucide-react';
-import { Attachment } from '../../stores/useChatStore';
+import type { Attachment } from '../../stores/useChatStore';
 import { processFile } from '../../utils/attachmentManager';
 import './Composer.css';
 

@@ -1,4 +1,4 @@
-import { Attachment } from '../stores/useChatStore';
+import type { Attachment } from '../stores/useChatStore';
 
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB
 const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50MB
@@ -21,6 +21,7 @@ export async function processFile(file: File): Promise<Attachment[]> {
         throw new Error(`PDF size exceeds 50MB limit: ${file.name}`);
      }
      // Dynamic import so we don't load pdfjs until needed
+     // @ts-ignore
      const { processPdfToImages } = await import('./pdfProcessor');
      return await processPdfToImages(file);
   }

@@ -107,7 +107,8 @@ export const useChatStore = create<ChatState>()(
                 if(c.id === chatId) {
                    const msgIndex = c.messages.findIndex(m => m.id === messageId);
                    if(msgIndex === -1) return c;
-                   return { ...c, messages: c.messages.slice(0, msgIndex) }; // Remove msg and everything after
+                   // Keep the message itself, delete everything after
+                   return { ...c, messages: c.messages.slice(0, msgIndex + 1) };
                 }
                 return c;
               })

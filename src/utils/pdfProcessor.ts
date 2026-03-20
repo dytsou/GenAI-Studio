@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { Attachment } from '../stores/useChatStore';
+import type { Attachment } from '../stores/useChatStore';
 
 // Use an unpkg worker for pdfjs to avoid complex local worker setup
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -26,7 +26,8 @@ export async function processPdfToImages(file: File): Promise<Attachment[]> {
 
     const renderContext = {
       canvasContext: context,
-      viewport: viewport
+      viewport: viewport,
+      canvas: canvas
     };
 
     await page.render(renderContext).promise;

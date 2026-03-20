@@ -1,5 +1,5 @@
 import { useSettingsStore } from '../stores/useSettingsStore';
-import { Message } from '../stores/useChatStore';
+import type { Message } from '../stores/useChatStore';
 
 export async function* streamChatCompletions(
   messages: Omit<Message, 'id'>[],
