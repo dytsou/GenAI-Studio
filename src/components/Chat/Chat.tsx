@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
-import { useChatStore, Message, Attachment } from '../../stores/useChatStore';
+import { useChatStore } from '../../stores/useChatStore';
+import type { Attachment } from '../../stores/useChatStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { MessageRenderer } from './MessageRenderer';
 import { Composer } from './Composer';
 import { streamChatCompletions } from '../../api/client';
-import { v4 as uuidv4 } from 'uuid';
 import './Chat.css';
 
 export function Chat() {
-  const { chats, activeChatId, addMessage, updateMessage } = useChatStore();
+  const { chats, activeChatId, addMessage, updateMessage, deleteMessageAndSubsequent, deleteLastMessage } = useChatStore();
   const settings = useSettingsStore();
 
   const activeChat = chats.find(c => c.id === activeChatId);
@@ -29,7 +29,6 @@ export function Chat() {
   const handleSend = async (content: string, attachments: Attachment[]) => {
     if (!activeChatId) return;
 
-    // Add User Message
     addMessage(activeChatId, {
       role: 'user',
       content,
@@ -39,25 +38,33 @@ export function Chat() {
     await handleGenerate();
   };
 
+  const handleRegenerate = async () => {
+    if (!activeChatId) return;
+    if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+       deleteLastMessage(activeChatId);
+    }
+    await handleGenerate();
+  };
+
+  const handleEdit = async (messageId: string, newContent: string) => {
+     if (!activeChatId) return;
+     updateMessage(activeChatId, messageId, { content: newContent });
+     deleteMessageAndSubsequent(activeChatId, messageId);
+     await handleGenerate();
+  };
+
   const handleGenerate = async () => {
     if (!activeChatId) return;
 
-    // We need to fetch the newly updated messages state somehow or rely on the previous
-    // Since we just dispatched addMessage, it might not be reflected in `messages` sync array yet
-    // Best way is to read directly from the store state
     const currentChat = useChatStore.getState().chats.find(c => c.id === activeChatId);
     if (!currentChat) return;
     const currentMessages = currentChat.messages;
 
-    const assistantMsgId = uuidv4();
     useChatStore.getState().addMessage(activeChatId, {
       role: 'assistant',
       content: '',
-      // Note: addMessage auto-generates a new ID, so we need to capture what ID was generated
     });
     
-    // Actually, addMessage generates an ID internally but doesn't return it!
-    // We should fix that or construct it outside. I will rely on reading the last message ID
     const newlyAddedChat = useChatStore.getState().chats.find(c => c.id === activeChatId);
     const lastMsg = newlyAddedChat?.messages[newlyAddedChat.messages.length - 1];
     if (!lastMsg) return;
@@ -68,8 +75,8 @@ export function Chat() {
     try {
       const generator = streamChatCompletions(
         currentMessages,
-        undefined, // System prompt later if needed
-        settings.structuredOutputMode ? undefined : undefined, // Replace later for Schema
+        undefined, 
+        settings.structuredOutputMode ? undefined : undefined, // schema handled later
         abortControllerRef.current.signal
       );
 
@@ -103,6 +110,12 @@ export function Chat() {
     );
   }
 
+  // Find the last user message and the last assistant message indices to enable regeneration safely
+  const isMessageLastAssistantMsg = (msgId: string) => {
+     if (messages.length === 0) return false;
+     return messages[messages.length - 1].id === msgId && messages[messages.length - 1].role === 'assistant';
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-messages-area">
@@ -112,8 +125,13 @@ export function Chat() {
           </div>
         ) : (
           <div className="messages-list">
-            {messages.map(msg => (
-              <MessageRenderer key={msg.id} message={msg} />
+            {messages.map((msg) => (
+              <MessageRenderer 
+                key={msg.id} 
+                message={msg} 
+                onRegenerate={isMessageLastAssistantMsg(msg.id) && !isGenerating ? handleRegenerate : undefined}
+                onEdit={msg.role === 'user' && !isGenerating ? (content) => handleEdit(msg.id, content) : undefined}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>
