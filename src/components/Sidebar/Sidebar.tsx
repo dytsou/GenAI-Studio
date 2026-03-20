@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { MessageSquarePlus, MessageSquare, Settings, Trash2, Menu, X } from 'lucide-react';
 import { useChatStore } from '../../stores/useChatStore';
 import './Sidebar.css';

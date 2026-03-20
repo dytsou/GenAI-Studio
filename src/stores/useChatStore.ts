@@ -41,7 +41,7 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       chats: [],
       activeChatId: null,
       createChat: () => {
