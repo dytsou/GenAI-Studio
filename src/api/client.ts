@@ -1,11 +1,32 @@
 import { useSettingsStore } from '../stores/useSettingsStore';
 import type { Message } from '../stores/useChatStore';
 
+type ResponseFormat = Record<string, unknown>;
+
+type TextContentPart = { type: 'text'; text: string };
+type ImageUrlContentPart = { type: 'image_url'; image_url: { url: string } };
+type ChatContentPart = TextContentPart | ImageUrlContentPart;
+
+type ChatCompletionMessage = {
+  role: Message['role'];
+  content: string | ChatContentPart[];
+};
+
+type ChatCompletionRequestPayload = {
+  model: string;
+  messages: ChatCompletionMessage[];
+  temperature: number;
+  top_p: number;
+  max_tokens: number;
+  stream: true;
+  response_format?: ResponseFormat;
+};
+
 export async function* streamChatCompletions(
   messages: Omit<Message, 'id'>[],
   systemPrompt?: string,
-  responseFormat?: any,
-  abortSignal?: AbortSignal
+  responseFormat?: ResponseFormat,
+  abortSignal?: AbortSignal,
 ) {
   const { apiKey, baseUrl, model, temperature, topP, maxTokens } = useSettingsStore.getState();
 
@@ -14,7 +35,7 @@ export async function* streamChatCompletions(
   }
 
   // Format messages for OpenAI API
-  const apiMessages = [];
+  const apiMessages: ChatCompletionMessage[] = [];
   
   if (systemPrompt) {
     apiMessages.push({ role: 'system', content: systemPrompt });
@@ -23,22 +44,22 @@ export async function* streamChatCompletions(
   for (const msg of messages) {
     // Handling attachments (images and PDFs parsed to base64 images)
     if (msg.attachments && msg.attachments.length > 0) {
-      const content: any[] = [
-        { type: 'text', text: msg.content }
-      ];
+      const contentParts: ChatContentPart[] = [{ type: 'text', text: msg.content }];
+
       for (const att of msg.attachments) {
-        content.push({
+        contentParts.push({
           type: 'image_url',
-          image_url: { url: att.dataUrl }
+          image_url: { url: att.dataUrl },
         });
       }
-      apiMessages.push({ role: msg.role, content });
+
+      apiMessages.push({ role: msg.role, content: contentParts });
     } else {
       apiMessages.push({ role: msg.role, content: msg.content });
     }
   }
 
-  const payload: Record<string, any> = {
+  const payload: ChatCompletionRequestPayload = {
     model,
     messages: apiMessages,
     temperature,
@@ -71,7 +92,7 @@ export async function* streamChatCompletions(
       const parsed = JSON.parse(errorText);
       errorText = parsed.error?.message || errorText;
     } catch (e) {
-      // ignore
+      console.error(e);
     }
     throw new Error(`API Error: ${response.status} - ${errorText}`);
   }
@@ -104,6 +125,7 @@ export async function* streamChatCompletions(
             yield parsed.choices[0].delta.content;
           }
         } catch (e) {
+          console.error(e);
           console.warn('Failed to parse stream chunk:', dataStr);
         }
       }
