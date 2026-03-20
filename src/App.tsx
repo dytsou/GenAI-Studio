@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Layout } from './components/Layout/Layout';
 import { useChatStore } from './stores/useChatStore';
 import { SettingsModal } from './components/SettingsModal/SettingsModal';
+import { Chat } from './components/Chat/Chat';
 import './App.css';
 
 function App() {
@@ -16,10 +17,7 @@ function App() {
   return (
     <>
       <Layout>
-        <div className="main-placeholder">
-          <h1>GenAI Studio</h1>
-          <p>Your conversation starts here</p>
-        </div>
+        <Chat />
       </Layout>
       <SettingsModal />
     </>
