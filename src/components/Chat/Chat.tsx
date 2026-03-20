@@ -25,9 +25,11 @@ export function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const lastMessageContent = messages[messages.length - 1]?.content;
+
   useEffect(() => {
     scrollToBottom();
-  }, [messages.length, messages[messages.length - 1]?.content]);
+  }, [messages.length, lastMessageContent]);
 
   // Derive generated schema for the request
   const generatedSchema = useMemo(() => {

@@ -11,7 +11,7 @@ export function SchemaWorkspace() {
   const { chats, activeChatId } = useChatStore();
 
   const activeChat = chats.find(c => c.id === activeChatId);
-  const messages = activeChat?.messages || [];
+  const messages = activeChat?.messages;
 
   const handleAddField = () => {
     setSchemaFields([...schemaFields, {
@@ -71,8 +71,9 @@ export function SchemaWorkspace() {
 
   // Find last assistant message to determine exportability
   const lastAssistantMessage = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'assistant') return messages[i];
+    const msgs = messages ?? [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'assistant') return msgs[i];
     }
     return null;
   }, [messages]);
