@@ -42,8 +42,10 @@ export function SettingsModal() {
     setLocalSettings(prev => ({
       ...prev,
       [name]:
-        name === 'maxTokens' && value === ''
-          ? ''
+        name === 'maxTokens'
+          ? value === ''
+            ? ''
+            : Number(value)
           : type === 'number' || type === 'range'
             ? Number(value)
             : value,
@@ -76,6 +78,10 @@ export function SettingsModal() {
 
   if (!isModalOpen) return null;
 
+  const preventCopy = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+  };
+
   return (
     <div className="modal-overlay">
       <div className="modal-content settings-modal">
@@ -99,12 +105,14 @@ export function SettingsModal() {
           <div className="form-group">
             <label htmlFor="baseUrl">API Base URL</label>
             <input 
-              type="url" 
+              type="password"
               id="baseUrl" 
               name="baseUrl" 
-              value={localSettings.baseUrl}
+              value={localSettings.baseUrl || settings.baseUrl}
               onChange={handleChange}
               placeholder="https://api.openai.com/v1"
+              onCopy={preventCopy}
+              onCut={preventCopy}
             />
           </div>
 
@@ -114,21 +122,25 @@ export function SettingsModal() {
               type="password" 
               id="apiKey" 
               name="apiKey" 
-              value={localSettings.apiKey}
+              value={localSettings.apiKey || settings.apiKey}
               onChange={handleChange}
               placeholder="sk-..."
+              onCopy={preventCopy}
+              onCut={preventCopy}
             />
           </div>
 
           <div className="form-group">
             <label htmlFor="model">Model Name</label>
             <input 
-              type="text" 
+              type="text"
               id="model" 
               name="model" 
-              value={localSettings.model}
+              value={localSettings.model || settings.model}
               onChange={handleChange}
               placeholder="gpt-4o, llama-3, etc."
+              onCopy={preventCopy}
+              onCut={preventCopy}
             />
           </div>
 
@@ -165,13 +177,14 @@ export function SettingsModal() {
           <div className="form-group">
             <label htmlFor="maxTokens">Max Tokens</label>
             <input 
-              type="number" 
+              type="number"
               id="maxTokens" 
               name="maxTokens" 
-              min="1" max="32768" 
-              value={localSettings.maxTokens}
+              value={localSettings.maxTokens === '' ? settings.maxTokens : localSettings.maxTokens}
               onChange={handleChange}
               placeholder="4096"
+              onCopy={preventCopy}
+              onCut={preventCopy}
             />
           </div>
 
