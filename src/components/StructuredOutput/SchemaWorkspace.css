@@ -1,0 +1,156 @@
+.schema-workspace {
+  background-color: var(--bg-secondary);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 380px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.schema-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.schema-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.add-field-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background-color: var(--accent-primary);
+  color: white;
+  padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.add-field-btn:hover {
+  background-color: var(--accent-hover);
+}
+
+.schema-table-container {
+  padding: 1rem;
+  flex-shrink: 0;
+}
+
+.schema-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.schema-table th, .schema-table td {
+  padding: 0.5rem 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.schema-table th {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.schema-table input[type="text"], .schema-table select {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+}
+
+.schema-table input[type="text"]:focus, .schema-table select:focus {
+  border-color: var(--border-focus);
+}
+
+.delete-field-btn {
+  color: var(--text-tertiary);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+}
+
+.delete-field-btn:hover {
+  color: var(--danger);
+  background: rgba(239,68,68,0.1);
+}
+
+.schema-preview, .schema-exports {
+  padding: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.schema-preview h4, .schema-exports h4 {
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.schema-preview pre {
+  background: var(--bg-primary);
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+}
+
+.validation-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(239,68,68,0.1);
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.export-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.export-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  padding: 0.5rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.export-btn:not(:disabled):hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-tertiary);
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .schema-workspace {
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 20;
+    box-shadow: -4px 0 15px rgba(0,0,0,0.5);
+  }
+}
