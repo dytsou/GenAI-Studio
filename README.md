@@ -228,4 +228,4 @@ If you see asset 404 errors in production (`index-*.js`, `index-*.css`), it is u
 
 ## License
 
-No license file is currently included. Add one if you plan to distribute this project.
+This project is licensed under the MIT License. See `LICENSE`.
