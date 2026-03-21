@@ -118,9 +118,10 @@ export function Chat() {
     abortControllerRef.current = new AbortController();
 
     try {
+      const systemPrompt = settings.systemPrompt.trim();
       const generator = streamChatCompletions(
         currentMessages,
-        undefined, 
+        systemPrompt || undefined,
         generatedSchema,
         abortControllerRef.current.signal
       );

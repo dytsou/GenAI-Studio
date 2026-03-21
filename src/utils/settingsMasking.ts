@@ -5,6 +5,7 @@ export type StoredSettings = {
   temperature: number;
   topP: number;
   maxTokens: number;
+  systemPrompt: string;
 };
 
 export type MaskedSettingsDraft = {
@@ -14,6 +15,7 @@ export type MaskedSettingsDraft = {
   temperature: number;
   topP: number;
   maxTokens: number | '';
+  systemPrompt: string;
 };
 
 export type MergeMaskedSettingsResult =
@@ -37,6 +39,7 @@ export function mergeMaskedSettings(params: {
     temperature: draft.temperature,
     topP: draft.topP,
     maxTokens: draft.maxTokens === '' ? stored.maxTokens : draft.maxTokens,
+    systemPrompt: draft.systemPrompt,
   };
 
   if (!merged.apiKey) {

@@ -16,6 +16,7 @@ export function SettingsModal() {
     temperature: settings.temperature,
     topP: settings.topP,
     maxTokens: '',
+    systemPrompt: settings.systemPrompt,
   });
 
   const isModalOpen = isOpen || !settings.apiKey;
@@ -29,6 +30,7 @@ export function SettingsModal() {
         temperature: settings.temperature,
         topP: settings.topP,
         maxTokens: '',
+        systemPrompt: settings.systemPrompt,
       });
       setIsOpen(true);
     };
@@ -37,7 +39,7 @@ export function SettingsModal() {
     return () => window.removeEventListener('open-settings', handleOpen);
   }, [settings]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     setLocalSettings(prev => ({
       ...prev,
@@ -63,6 +65,7 @@ export function SettingsModal() {
         temperature: settings.temperature,
         topP: settings.topP,
         maxTokens: settings.maxTokens,
+        systemPrompt: settings.systemPrompt,
       },
       draft: localSettings,
     });
@@ -185,6 +188,18 @@ export function SettingsModal() {
               placeholder="4096"
               onCopy={preventCopy}
               onCut={preventCopy}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="systemPrompt">System Prompt</label>
+            <textarea
+              id="systemPrompt"
+              name="systemPrompt"
+              value={localSettings.systemPrompt}
+              onChange={handleChange}
+              placeholder="Optional instructions for assistant behavior..."
+              rows={4}
             />
           </div>
 

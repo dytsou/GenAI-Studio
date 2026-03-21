@@ -16,6 +16,7 @@ interface SettingsState {
   temperature: number;
   topP: number;
   maxTokens: number;
+  systemPrompt: string;
   structuredOutputMode: boolean;
   schemaFields: SchemaField[];
   setSettings: (settings: Partial<SettingsState>) => void;
@@ -31,6 +32,7 @@ export const useSettingsStore = create<SettingsState>()(
       temperature: 0.7,
       topP: 1.0,
       maxTokens: 4096,
+      systemPrompt: '',
       structuredOutputMode: false,
       schemaFields: [
         { id: '1', name: 'summary', type: 'string', required: true, description: 'A short summary' }
