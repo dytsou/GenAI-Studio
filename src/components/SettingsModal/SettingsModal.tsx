@@ -10,12 +10,12 @@ export function SettingsModal() {
 
   // Mask stored config values in the UI by not pre-filling text inputs.
   const [localSettings, setLocalSettings] = useState<MaskedSettingsDraft>({
-    apiKey: '',
-    baseUrl: '',
-    model: '',
+    apiKey: settings.apiKey,
+    baseUrl: settings.baseUrl,
+    model: settings.model,
     temperature: settings.temperature,
     topP: settings.topP,
-    maxTokens: '',
+    maxTokens: settings.maxTokens,
     systemPrompt: settings.systemPrompt,
   });
 
@@ -24,12 +24,12 @@ export function SettingsModal() {
   useEffect(() => {
     const handleOpen = () => {
       setLocalSettings({
-        apiKey: '',
-        baseUrl: '',
-        model: '',
+        apiKey: settings.apiKey,
+        baseUrl: settings.baseUrl,
+        model: settings.model,
         temperature: settings.temperature,
         topP: settings.topP,
-        maxTokens: '',
+        maxTokens: settings.maxTokens,
         systemPrompt: settings.systemPrompt,
       });
       setIsOpen(true);
@@ -111,9 +111,9 @@ export function SettingsModal() {
               type="password"
               id="baseUrl" 
               name="baseUrl" 
-              value={localSettings.baseUrl || settings.baseUrl}
+              value={localSettings.baseUrl}
               onChange={handleChange}
-              placeholder="https://api.openai.com/v1"
+              placeholder={settings.baseUrl || "https://api.openai.com/v1"}
               onCopy={preventCopy}
               onCut={preventCopy}
             />
@@ -125,9 +125,9 @@ export function SettingsModal() {
               type="password" 
               id="apiKey" 
               name="apiKey" 
-              value={localSettings.apiKey || settings.apiKey}
+              value={localSettings.apiKey}
               onChange={handleChange}
-              placeholder="sk-..."
+              placeholder={settings.apiKey ? 'Leave empty to keep existing key' : 'sk-...'}
               onCopy={preventCopy}
               onCut={preventCopy}
             />
@@ -139,9 +139,9 @@ export function SettingsModal() {
               type="text"
               id="model" 
               name="model" 
-              value={localSettings.model || settings.model}
+              value={localSettings.model}
               onChange={handleChange}
-              placeholder="gpt-4o, llama-3, etc."
+              placeholder={settings.model || "gpt-4o, llama-3, etc."}
               onCopy={preventCopy}
               onCut={preventCopy}
             />
@@ -183,9 +183,9 @@ export function SettingsModal() {
               type="number"
               id="maxTokens" 
               name="maxTokens" 
-              value={localSettings.maxTokens === '' ? settings.maxTokens : localSettings.maxTokens}
+              value={localSettings.maxTokens}
               onChange={handleChange}
-              placeholder="4096"
+              placeholder={String(settings.maxTokens || 4096)}
               onCopy={preventCopy}
               onCut={preventCopy}
             />
