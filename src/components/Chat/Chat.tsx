@@ -71,7 +71,7 @@ export function Chat() {
     };
   }, [settings.structuredOutputMode, settings.schemaFields]);
 
-  const handleSend = async (content: string, attachments: Attachment[]) => {
+  const handleSend = async (content: string, attachments: Attachment[], promptOverride?: string) => {
     if (!activeChatId) return;
 
     addMessage(activeChatId, {
@@ -80,7 +80,7 @@ export function Chat() {
       attachments
     });
 
-    await handleGenerate();
+    await handleGenerate(promptOverride);
   };
 
   const handleRegenerate = async () => {
@@ -98,7 +98,7 @@ export function Chat() {
      await handleGenerate();
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (promptOverride?: string) => {
     if (!activeChatId) return;
 
     const currentChat = useChatStore.getState().chats.find(c => c.id === activeChatId);
@@ -118,7 +118,7 @@ export function Chat() {
     abortControllerRef.current = new AbortController();
 
     try {
-      const systemPrompt = settings.systemPrompt.trim();
+      const systemPrompt = (promptOverride ?? settings.systemPrompt).trim();
       const generator = streamChatCompletions(
         currentMessages,
         systemPrompt || undefined,
