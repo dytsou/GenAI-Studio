@@ -9,6 +9,7 @@ const storedBase: StoredSettings = {
   temperature: 0.7,
   topP: 1,
   maxTokens: 4096,
+  systemPrompt: 'You are a helpful assistant.',
 };
 
 describe('mergeMaskedSettings', () => {
@@ -20,6 +21,7 @@ describe('mergeMaskedSettings', () => {
       temperature: 0.2,
       topP: 0.8,
       maxTokens: '',
+      systemPrompt: '',
     };
 
     const result = mergeMaskedSettings({ stored: storedBase, draft });
@@ -28,6 +30,7 @@ describe('mergeMaskedSettings', () => {
     if ('merged' in result) {
       expect(result.merged).toEqual({
         ...storedBase,
+        systemPrompt: '',
         temperature: draft.temperature,
         topP: draft.topP,
       });
@@ -42,6 +45,7 @@ describe('mergeMaskedSettings', () => {
       temperature: 0.1,
       topP: 0.9,
       maxTokens: 2048,
+      systemPrompt: 'Answer with bullet points.',
     };
 
     const result = mergeMaskedSettings({ stored: storedBase, draft });
@@ -56,6 +60,7 @@ describe('mergeMaskedSettings', () => {
         temperature: draft.temperature,
         topP: draft.topP,
         maxTokens: draft.maxTokens,
+        systemPrompt: draft.systemPrompt,
       });
     }
   });
@@ -69,6 +74,7 @@ describe('mergeMaskedSettings', () => {
       temperature: 0.7,
       topP: 1,
       maxTokens: '',
+      systemPrompt: '',
     };
 
     const result = mergeMaskedSettings({ stored, draft });
