@@ -8,12 +8,12 @@ It supports streaming chat completions, multi-chat history, attachments (images/
 
 - Multi-chat sidebar with create, search, switch, and delete.
 - Streaming assistant responses (`/chat/completions` SSE-style chunks).
+- Assistant messages rendered as **Markdown** (GFM) with **HTML sanitization** for safe display.
 - Attachment support:
   - Images (up to 20MB each)
   - PDFs (up to 50MB each, converted to images before sending)
 - Settings modal with persisted model/API settings:
-  - API key
-  - Base URL
+  - API key and base URL (masked by default; **eye buttons beside each field** — press and hold to peek; release to hide again)
   - Model
   - Temperature / Top P / Max Tokens
   - Global system prompt
@@ -35,6 +35,10 @@ It supports streaming chat completions, multi-chat history, attachments (images/
 - Vitest
 - ESLint
 - pnpm
+- **react-markdown** + **remark-gfm** (message rendering)
+- **dompurify** (sanitized HTML in messages)
+- **pdfjs-dist** (PDF processing)
+- **lucide-react** (icons)
 
 ## Project Structure
 
@@ -80,7 +84,7 @@ pnpm dev
 
 4. Configure settings in-app:
    - Open **Settings**
-   - Set API key and model config
+   - Set API key and model config (use the eye control next to URL/key to **hold and reveal** when needed)
    - Save configuration
 
 ## Available Scripts
@@ -113,6 +117,12 @@ All settings are stored in browser local storage through Zustand persistence.
   - `temperature`, `topP`, `maxTokens`
   - `systemPrompt`
   - structured output mode + schema fields
+
+### Settings UI (sensitive fields)
+
+- **API Base URL** and **API Key** use password-style masking in the form.
+- Each field has an **eye** button on the right: **press and hold** (mouse, touch, or Space/Enter on the button) to show plaintext; **release** to mask again.
+- Copy/cut from those fields is only allowed while the value is temporarily visible.
 
 ## API Compatibility
 
@@ -223,6 +233,7 @@ If you see asset 404 errors in production (`index-*.js`, `index-*.css`), it is u
 ## Security Notes
 
 - API key is stored in browser local storage.
+- URL and key are masked in the settings form; use the eye control only when you need to verify values, and avoid shoulder-surfing on shared screens.
 - Do not use this setup for shared/public devices without additional hardening.
 - Avoid committing secrets or tokens into the repository.
 
