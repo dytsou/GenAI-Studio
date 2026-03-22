@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useChatStore } from '../../stores/useChatStore';
 import type { Attachment } from '../../stores/useChatStore';
 import { useSettingsStore } from '../../stores/useSettingsStore';
@@ -10,6 +10,9 @@ import { streamChatCompletions } from '../../api/client';
 import { estimatePromptTokens, estimateTokensFromChars } from '../../utils/tokenEstimate';
 import { StreamStatsBar } from './StreamStatsBar';
 import { ToggleRight, ToggleLeft } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import type { QueuedSend } from './queuedSendTypes';
+import { popFirstSendable } from './queueUtils';
 import './Chat.css';
 
 export function Chat() {
@@ -26,7 +29,31 @@ export function Chat() {
     tokensPerSecond: number | null;
   } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [sendQueue, setSendQueue] = useState<QueuedSend[]>([]);
+  const sendQueueRef = useRef<QueuedSend[]>([]);
+  sendQueueRef.current = sendQueue;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSendQueue([]);
+  }, [activeChatId]);
+
+  const updateQueuedSend = useCallback(
+    (id: string, patch: Partial<Pick<QueuedSend, 'content' | 'attachments' | 'promptOverride'>>) => {
+      setSendQueue((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+    },
+    [],
+  );
+
+  const removeQueuedSend = useCallback((id: string) => {
+    setSendQueue((prev) => prev.filter((q) => q.id !== id));
+  }, []);
+
+  const appendAttachmentsToQueued = useCallback((id: string, newAttachments: Attachment[]) => {
+    setSendQueue((prev) =>
+      prev.map((q) => (q.id === id ? { ...q, attachments: [...q.attachments, ...newAttachments] } : q)),
+    );
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,13 +108,21 @@ export function Chat() {
   const handleSend = async (content: string, attachments: Attachment[], promptOverride?: string) => {
     if (!activeChatId) return;
 
+    if (isGenerating) {
+      setSendQueue((prev) => [
+        ...prev,
+        { id: uuidv4(), content, attachments, promptOverride },
+      ]);
+      return;
+    }
+
     addMessage(activeChatId, {
       role: 'user',
       content,
       attachments
     });
 
-    await handleGenerate(promptOverride);
+    await handleGenerate(promptOverride, activeChatId);
   };
 
   const handleRegenerate = async () => {
@@ -95,29 +130,30 @@ export function Chat() {
     if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
        deleteLastMessage(activeChatId);
     }
-    await handleGenerate();
+    await handleGenerate(undefined, activeChatId);
   };
 
   const handleEdit = async (messageId: string, newContent: string) => {
      if (!activeChatId) return;
      updateMessage(activeChatId, messageId, { content: newContent });
      deleteMessageAndSubsequent(activeChatId, messageId);
-     await handleGenerate();
+     await handleGenerate(undefined, activeChatId);
   };
 
-  const handleGenerate = async (promptOverride?: string) => {
-    if (!activeChatId) return;
+  const handleGenerate = async (promptOverride?: string, explicitChatId?: string) => {
+    const chatIdForRun = explicitChatId ?? activeChatId;
+    if (!chatIdForRun) return;
 
-    const currentChat = useChatStore.getState().chats.find(c => c.id === activeChatId);
+    const currentChat = useChatStore.getState().chats.find(c => c.id === chatIdForRun);
     if (!currentChat) return;
     const currentMessages = currentChat.messages;
 
-    useChatStore.getState().addMessage(activeChatId, {
+    useChatStore.getState().addMessage(chatIdForRun, {
       role: 'assistant',
       content: '',
     });
     
-    const newlyAddedChat = useChatStore.getState().chats.find(c => c.id === activeChatId);
+    const newlyAddedChat = useChatStore.getState().chats.find(c => c.id === chatIdForRun);
     const lastMsg = newlyAddedChat?.messages[newlyAddedChat.messages.length - 1];
     if (!lastMsg) return;
 
@@ -135,6 +171,7 @@ export function Chat() {
     });
 
     let receivedUsage = false;
+    let aborted = false;
     let firstTokenMs: number | null = null;
     let fullContent = '';
 
@@ -155,7 +192,7 @@ export function Chat() {
           const elapsed = (performance.now() - firstTokenMs) / 1000;
           const tps =
             elapsed > 0 && completionEstimate > 0 ? completionEstimate / elapsed : null;
-          updateMessage(activeChatId, lastMsg.id, { content: fullContent });
+          updateMessage(chatIdForRun, lastMsg.id, { content: fullContent });
           setStreamStats((prev) => ({
             promptTokens: prev?.promptTokens ?? promptEstimate,
             completionTokens: completionEstimate,
@@ -173,8 +210,10 @@ export function Chat() {
       }
     } catch (err: unknown) {
       const maybeError = err as { name?: unknown };
-      if (maybeError.name !== 'AbortError') {
-        updateMessage(activeChatId, lastMsg.id, { error: true });
+      if (maybeError.name === 'AbortError') {
+        aborted = true;
+      } else {
+        updateMessage(chatIdForRun, lastMsg.id, { error: true });
         console.error(err);
       }
     } finally {
@@ -193,10 +232,27 @@ export function Chat() {
       }
       setIsGenerating(false);
       abortControllerRef.current = null;
+
+      if (!aborted) {
+        const { msg, rest } = popFirstSendable(sendQueueRef.current);
+        sendQueueRef.current = rest;
+        setSendQueue(rest);
+        if (msg) {
+          const trimmed = msg.content.trim();
+          addMessage(chatIdForRun, {
+            role: 'user',
+            content: trimmed,
+            attachments: msg.attachments,
+          });
+          const override = msg.promptOverride?.trim();
+          void handleGenerate(override || undefined, chatIdForRun);
+        }
+      }
     }
   };
 
   const handleStop = () => {
+    setSendQueue([]);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -264,6 +320,10 @@ export function Chat() {
             onSend={handleSend}
             onStop={handleStop}
             isGenerating={isGenerating}
+            sendQueue={sendQueue}
+            onUpdateQueuedSend={updateQueuedSend}
+            onRemoveQueuedSend={removeQueuedSend}
+            onAppendAttachmentsToQueued={appendAttachmentsToQueued}
           />
         </div>
       </div>

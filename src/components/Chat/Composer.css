@@ -67,6 +67,13 @@
   gap: 0.75rem;
 }
 
+.composer-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
 .composer-tools-row {
   display: flex;
   justify-content: flex-start;

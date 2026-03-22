@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Square, Paperclip, X, Sparkles } from 'lucide-react';
 import type { Attachment } from '../../stores/useChatStore';
+import type { QueuedSend } from './queuedSendTypes';
+import { ComposerQueuedList } from './ComposerQueuedList';
 import { processFile } from '../../utils/attachmentManager';
 import './Composer.css';
 
@@ -8,9 +10,24 @@ interface ComposerProps {
   onSend: (content: string, attachments: Attachment[], systemPromptOverride?: string) => void;
   onStop: () => void;
   isGenerating: boolean;
+  sendQueue: QueuedSend[];
+  onUpdateQueuedSend: (
+    id: string,
+    patch: Partial<Pick<QueuedSend, 'content' | 'attachments' | 'promptOverride'>>,
+  ) => void;
+  onRemoveQueuedSend: (id: string) => void;
+  onAppendAttachmentsToQueued: (id: string, attachments: Attachment[]) => void;
 }
 
-export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
+export function Composer({
+  onSend,
+  onStop,
+  isGenerating,
+  sendQueue,
+  onUpdateQueuedSend,
+  onRemoveQueuedSend,
+  onAppendAttachmentsToQueued,
+}: ComposerProps) {
   const [content, setContent] = useState('');
   const [systemPromptOverride, setSystemPromptOverride] = useState('');
   const [isSystemOverrideEnabled, setIsSystemOverrideEnabled] = useState(false);
@@ -27,7 +44,7 @@ export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
   }, [content]);
 
   const handleSend = () => {
-    if ((!content.trim() && attachments.length === 0) || isGenerating) return;
+    if (!content.trim() && attachments.length === 0) return;
     const override = isSystemOverrideEnabled ? systemPromptOverride.trim() : '';
     onSend(content, attachments, override || undefined);
     setContent('');
@@ -75,7 +92,7 @@ export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
           type="button"
           className={`composer-system-toggle-btn ${isSystemOverrideEnabled ? 'active' : ''}`}
           onClick={() => setIsSystemOverrideEnabled(prev => !prev)}
-          disabled={isGenerating || isProcessingFile}
+          disabled={isProcessingFile}
           title="Toggle per-message system override"
           aria-label="Toggle per-message system override"
         >
@@ -83,6 +100,12 @@ export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
         </button>
       </div>
       <div className="composer-container">
+        <ComposerQueuedList
+          items={sendQueue}
+          onUpdate={onUpdateQueuedSend}
+          onRemove={onRemoveQueuedSend}
+          onAppendAttachments={onAppendAttachmentsToQueued}
+        />
         {attachments.length > 0 && (
           <div className="composer-attachments">
             {attachments.map((att, idx) => (
@@ -103,7 +126,7 @@ export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
           <button 
             className="attach-btn" 
             onClick={() => fileInputRef.current?.click()}
-            disabled={isGenerating || isProcessingFile}
+            disabled={isProcessingFile}
             title="Attach Image or PDF"
           >
             <Paperclip size={20} />
@@ -125,22 +148,34 @@ export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
             onKeyDown={handleKeyDown}
             placeholder="Ask anything..."
             rows={1}
-            disabled={isGenerating || isProcessingFile}
+            disabled={isProcessingFile}
           />
 
-          {isGenerating ? (
-            <button className="stop-btn" onClick={onStop} title="Stop generation">
-              <Square size={20} fill="currentColor" />
-            </button>
-          ) : (
-            <button 
-              className="send-btn" 
+          <div className="composer-actions">
+            {isGenerating && (
+              <button
+                type="button"
+                className="stop-btn"
+                onClick={onStop}
+                title="Stop generation and clear queued messages"
+              >
+                <Square size={20} fill="currentColor" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="send-btn"
               onClick={handleSend}
               disabled={(!content.trim() && attachments.length === 0) || isProcessingFile}
+              title={
+                isGenerating
+                  ? 'Add message to queue (sent after this reply finishes)'
+                  : 'Send'
+              }
             >
               <Send size={20} />
             </button>
-          )}
+          </div>
         </div>
         {isProcessingFile && <div className="processing-indicator">Processing attachments...</div>}
       </div>
@@ -152,7 +187,7 @@ export function Composer({ onSend, onStop, isGenerating }: ComposerProps) {
             value={systemPromptOverride}
             onChange={e => setSystemPromptOverride(e.target.value)}
             placeholder="System override (this message only)"
-            disabled={isGenerating || isProcessingFile}
+            disabled={isProcessingFile}
           />
         </div>
       )}
