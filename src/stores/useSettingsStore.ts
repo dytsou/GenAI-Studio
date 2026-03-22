@@ -16,6 +16,10 @@ interface SettingsState {
   temperature: number;
   topP: number;
   maxTokens: number;
+  /** Max context window for stats denominator (tokens). */
+  contextWindowTokens: number;
+  /** Request usage in stream when supported (OpenAI-compatible). */
+  includeStreamUsage: boolean;
   systemPrompt: string;
   structuredOutputMode: boolean;
   schemaFields: SchemaField[];
@@ -32,6 +36,8 @@ export const useSettingsStore = create<SettingsState>()(
       temperature: 0.7,
       topP: 1.0,
       maxTokens: 4096,
+      contextWindowTokens: 128000,
+      includeStreamUsage: true,
       systemPrompt: '',
       structuredOutputMode: false,
       schemaFields: [

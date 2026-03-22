@@ -22,6 +22,8 @@ describe('useSettingsStore persistence', () => {
     expect(state.temperature).toBe(0.7);
     expect(state.topP).toBe(1.0);
     expect(state.maxTokens).toBe(4096);
+    expect(state.contextWindowTokens).toBe(128000);
+    expect(state.includeStreamUsage).toBe(true);
     expect(state.structuredOutputMode).toBe(false);
   });
 
@@ -34,6 +36,8 @@ describe('useSettingsStore persistence', () => {
         temperature: 0.2,
         topP: 0.9,
         maxTokens: 1234,
+        contextWindowTokens: 262144,
+        includeStreamUsage: false,
         structuredOutputMode: true,
         schemaFields: [
           { id: '1', name: 'summary', type: 'string', required: true, description: 'A short summary' },
@@ -51,6 +55,8 @@ describe('useSettingsStore persistence', () => {
     expect(state.temperature).toBe(0.2);
     expect(state.topP).toBe(0.9);
     expect(state.maxTokens).toBe(1234);
+    expect(state.contextWindowTokens).toBe(262144);
+    expect(state.includeStreamUsage).toBe(false);
     expect(state.structuredOutputMode).toBe(true);
   });
 });

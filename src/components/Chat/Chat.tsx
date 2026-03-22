@@ -7,6 +7,8 @@ import { MessageRenderer } from './MessageRenderer';
 import { Composer } from './Composer';
 import { SchemaWorkspace } from '../StructuredOutput/SchemaWorkspace';
 import { streamChatCompletions } from '../../api/client';
+import { estimatePromptTokens, estimateTokensFromChars } from '../../utils/tokenEstimate';
+import { StreamStatsBar } from './StreamStatsBar';
 import { ToggleRight, ToggleLeft } from 'lucide-react';
 import './Chat.css';
 
@@ -18,6 +20,11 @@ export function Chat() {
   const messages = activeChat?.messages || [];
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [streamStats, setStreamStats] = useState<{
+    promptTokens: number;
+    completionTokens: number;
+    tokensPerSecond: number | null;
+  } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -117,6 +124,20 @@ export function Chat() {
     setIsGenerating(true);
     abortControllerRef.current = new AbortController();
 
+    const promptEstimate = estimatePromptTokens(
+      currentMessages,
+      (promptOverride ?? settings.systemPrompt).trim() || undefined,
+    );
+    setStreamStats({
+      promptTokens: promptEstimate,
+      completionTokens: 0,
+      tokensPerSecond: null,
+    });
+
+    let receivedUsage = false;
+    let firstTokenMs: number | null = null;
+    let fullContent = '';
+
     try {
       const systemPrompt = (promptOverride ?? settings.systemPrompt).trim();
       const generator = streamChatCompletions(
@@ -126,10 +147,29 @@ export function Chat() {
         abortControllerRef.current.signal
       );
 
-      let fullContent = '';
-      for await (const chunk of generator) {
-        fullContent += chunk;
-        updateMessage(activeChatId, lastMsg.id, { content: fullContent });
+      for await (const event of generator) {
+        if (event.type === 'content') {
+          fullContent += event.text;
+          if (firstTokenMs === null) firstTokenMs = performance.now();
+          const completionEstimate = estimateTokensFromChars(fullContent);
+          const elapsed = (performance.now() - firstTokenMs) / 1000;
+          const tps =
+            elapsed > 0 && completionEstimate > 0 ? completionEstimate / elapsed : null;
+          updateMessage(activeChatId, lastMsg.id, { content: fullContent });
+          setStreamStats((prev) => ({
+            promptTokens: prev?.promptTokens ?? promptEstimate,
+            completionTokens: completionEstimate,
+            tokensPerSecond: tps,
+          }));
+        } else if (event.type === 'usage') {
+          receivedUsage = true;
+          const u = event.usage;
+          setStreamStats((prev) => ({
+            promptTokens: u.prompt_tokens ?? prev?.promptTokens ?? promptEstimate,
+            completionTokens: u.completion_tokens ?? prev?.completionTokens ?? 0,
+            tokensPerSecond: prev?.tokensPerSecond ?? null,
+          }));
+        }
       }
     } catch (err: unknown) {
       const maybeError = err as { name?: unknown };
@@ -138,6 +178,19 @@ export function Chat() {
         console.error(err);
       }
     } finally {
+      if (firstTokenMs !== null) {
+        const elapsed = (performance.now() - firstTokenMs) / 1000;
+        setStreamStats((prev) => {
+          if (!prev) return null;
+          const completion = receivedUsage ? prev.completionTokens : estimateTokensFromChars(fullContent);
+          const tps = elapsed > 0 && completion > 0 ? completion / elapsed : null;
+          return {
+            promptTokens: prev.promptTokens,
+            completionTokens: completion,
+            tokensPerSecond: tps,
+          };
+        });
+      }
       setIsGenerating(false);
       abortControllerRef.current = null;
     }
@@ -197,10 +250,20 @@ export function Chat() {
           )}
         </div>
         <div className="chat-composer-area">
-          <Composer 
-            onSend={handleSend} 
-            onStop={handleStop} 
-            isGenerating={isGenerating} 
+          {streamStats && (
+            <StreamStatsBar
+              promptTokens={streamStats.promptTokens}
+              contextWindowTokens={settings.contextWindowTokens}
+              completionTokens={streamStats.completionTokens}
+              maxOutputTokens={settings.maxTokens}
+              tokensPerSecond={streamStats.tokensPerSecond}
+              active={isGenerating}
+            />
+          )}
+          <Composer
+            onSend={handleSend}
+            onStop={handleStop}
+            isGenerating={isGenerating}
           />
         </div>
       </div>

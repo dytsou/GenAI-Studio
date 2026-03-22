@@ -1,0 +1,34 @@
+.stream-stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  padding: 0.35rem 0.25rem 0;
+  min-height: 1.25rem;
+}
+
+.stream-stats-bar--active .stream-stats-value {
+  color: var(--text-secondary);
+}
+
+.stream-stats-label {
+  color: var(--text-tertiary);
+}
+
+.stream-stats-value {
+  color: var(--text-secondary);
+}
+
+.stream-stats-tps {
+  font-weight: 500;
+}
+
+.stream-stats-sep {
+  width: 1px;
+  height: 0.75rem;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}

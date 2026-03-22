@@ -9,6 +9,8 @@ const storedBase: StoredSettings = {
   temperature: 0.7,
   topP: 1,
   maxTokens: 4096,
+  contextWindowTokens: 128000,
+  includeStreamUsage: true,
   systemPrompt: 'You are a helpful assistant.',
 };
 
@@ -21,6 +23,8 @@ describe('mergeMaskedSettings', () => {
       temperature: 0.2,
       topP: 0.8,
       maxTokens: '',
+      contextWindowTokens: '',
+      includeStreamUsage: false,
       systemPrompt: '',
     };
 
@@ -33,6 +37,7 @@ describe('mergeMaskedSettings', () => {
         systemPrompt: '',
         temperature: draft.temperature,
         topP: draft.topP,
+        includeStreamUsage: false,
       });
     }
   });
@@ -45,6 +50,8 @@ describe('mergeMaskedSettings', () => {
       temperature: 0.1,
       topP: 0.9,
       maxTokens: 2048,
+      contextWindowTokens: 262144,
+      includeStreamUsage: false,
       systemPrompt: 'Answer with bullet points.',
     };
 
@@ -60,6 +67,8 @@ describe('mergeMaskedSettings', () => {
         temperature: draft.temperature,
         topP: draft.topP,
         maxTokens: draft.maxTokens,
+        contextWindowTokens: draft.contextWindowTokens,
+        includeStreamUsage: draft.includeStreamUsage,
         systemPrompt: draft.systemPrompt,
       });
     }
@@ -74,6 +83,8 @@ describe('mergeMaskedSettings', () => {
       temperature: 0.7,
       topP: 1,
       maxTokens: '',
+      contextWindowTokens: '',
+      includeStreamUsage: true,
       systemPrompt: '',
     };
 

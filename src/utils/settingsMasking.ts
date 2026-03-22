@@ -5,6 +5,8 @@ export type StoredSettings = {
   temperature: number;
   topP: number;
   maxTokens: number;
+  contextWindowTokens: number;
+  includeStreamUsage: boolean;
   systemPrompt: string;
 };
 
@@ -15,6 +17,8 @@ export type MaskedSettingsDraft = {
   temperature: number;
   topP: number;
   maxTokens: number | '';
+  contextWindowTokens: number | '';
+  includeStreamUsage: boolean;
   systemPrompt: string;
 };
 
@@ -39,6 +43,9 @@ export function mergeMaskedSettings(params: {
     temperature: draft.temperature,
     topP: draft.topP,
     maxTokens: draft.maxTokens === '' ? stored.maxTokens : draft.maxTokens,
+    contextWindowTokens:
+      draft.contextWindowTokens === '' ? stored.contextWindowTokens : draft.contextWindowTokens,
+    includeStreamUsage: draft.includeStreamUsage,
     systemPrompt: draft.systemPrompt,
   };
 

@@ -20,29 +20,46 @@ type ChatCompletionRequestPayload = {
   max_tokens: number;
   stream: true;
   response_format?: ResponseFormat;
+  stream_options?: { include_usage: boolean };
 };
+
+export type ChatStreamUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+};
+
+export type ChatStreamEvent =
+  | { type: 'content'; text: string }
+  | { type: 'usage'; usage: ChatStreamUsage };
 
 export async function* streamChatCompletions(
   messages: Omit<Message, 'id'>[],
   systemPrompt?: string,
   responseFormat?: ResponseFormat,
   abortSignal?: AbortSignal,
-) {
-  const { apiKey, baseUrl, model, temperature, topP, maxTokens } = useSettingsStore.getState();
+): AsyncGenerator<ChatStreamEvent, void, undefined> {
+  const {
+    apiKey,
+    baseUrl,
+    model,
+    temperature,
+    topP,
+    maxTokens,
+    includeStreamUsage,
+  } = useSettingsStore.getState();
 
   if (!apiKey) {
     throw new Error('API Key is not configured. Please set it in Settings.');
   }
 
-  // Format messages for OpenAI API
   const apiMessages: ChatCompletionMessage[] = [];
-  
+
   if (systemPrompt) {
     apiMessages.push({ role: 'system', content: systemPrompt });
   }
 
   for (const msg of messages) {
-    // Handling attachments (images and PDFs parsed to base64 images)
     if (msg.attachments && msg.attachments.length > 0) {
       const contentParts: ChatContentPart[] = [{ type: 'text', text: msg.content }];
 
@@ -68,11 +85,14 @@ export async function* streamChatCompletions(
     stream: true,
   };
 
+  if (includeStreamUsage) {
+    payload.stream_options = { include_usage: true };
+  }
+
   if (responseFormat) {
     payload.response_format = responseFormat;
   }
 
-  // Determine completions URL safely
   const completeBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   const url = completeBaseUrl.endsWith('/chat/completions') ? completeBaseUrl : `${completeBaseUrl}/chat/completions`;
 
@@ -80,10 +100,10 @@ export async function* streamChatCompletions(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
-    signal: abortSignal
+    signal: abortSignal,
   });
 
   if (!response.ok) {
@@ -116,13 +136,27 @@ export async function* streamChatCompletions(
     for (const chunk of chunks) {
       const trimmed = chunk.trim();
       if (!trimmed || trimmed === 'data: [DONE]') continue;
-      
+
       if (trimmed.startsWith('data: ')) {
         const dataStr = trimmed.slice(6);
         try {
-          const parsed = JSON.parse(dataStr);
-          if (parsed.choices && parsed.choices[0]?.delta?.content) {
-            yield parsed.choices[0].delta.content;
+          const parsed = JSON.parse(dataStr) as {
+            choices?: Array<{ delta?: { content?: string } }>;
+            usage?: ChatStreamUsage;
+          };
+
+          if (
+            parsed.usage &&
+            (parsed.usage.prompt_tokens != null ||
+              parsed.usage.completion_tokens != null ||
+              parsed.usage.total_tokens != null)
+          ) {
+            yield { type: 'usage', usage: parsed.usage };
+          }
+
+          const deltaContent = parsed.choices?.[0]?.delta?.content;
+          if (typeof deltaContent === 'string' && deltaContent.length > 0) {
+            yield { type: 'content', text: deltaContent };
           }
         } catch (e) {
           console.error(e);

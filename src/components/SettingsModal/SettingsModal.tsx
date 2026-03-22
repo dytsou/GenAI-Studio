@@ -18,6 +18,8 @@ export function SettingsModal() {
     temperature: settings.temperature,
     topP: settings.topP,
     maxTokens: settings.maxTokens,
+    contextWindowTokens: settings.contextWindowTokens,
+    includeStreamUsage: settings.includeStreamUsage,
     systemPrompt: settings.systemPrompt,
   });
 
@@ -32,6 +34,8 @@ export function SettingsModal() {
         temperature: settings.temperature,
         topP: settings.topP,
         maxTokens: settings.maxTokens,
+        contextWindowTokens: settings.contextWindowTokens,
+        includeStreamUsage: settings.includeStreamUsage,
         systemPrompt: settings.systemPrompt,
       });
       setPressReveal(null);
@@ -63,7 +67,7 @@ export function SettingsModal() {
     setLocalSettings(prev => ({
       ...prev,
       [name]:
-        name === 'maxTokens'
+        name === 'maxTokens' || name === 'contextWindowTokens'
           ? value === ''
             ? ''
             : Number(value)
@@ -84,6 +88,8 @@ export function SettingsModal() {
         temperature: settings.temperature,
         topP: settings.topP,
         maxTokens: settings.maxTokens,
+        contextWindowTokens: settings.contextWindowTokens,
+        includeStreamUsage: settings.includeStreamUsage,
         systemPrompt: settings.systemPrompt,
       },
       draft: localSettings,
@@ -252,7 +258,7 @@ export function SettingsModal() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="maxTokens">Max Tokens</label>
+            <label htmlFor="maxTokens">Max Tokens (output limit)</label>
             <input 
               type="number"
               id="maxTokens" 
@@ -263,6 +269,36 @@ export function SettingsModal() {
               onCopy={preventCopy}
               onCut={preventCopy}
             />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="contextWindowTokens">Context window (tokens, for stats)</label>
+            <input
+              type="number"
+              id="contextWindowTokens"
+              name="contextWindowTokens"
+              value={localSettings.contextWindowTokens}
+              onChange={handleChange}
+              placeholder={String(settings.contextWindowTokens || 128000)}
+              min={1}
+              onCopy={preventCopy}
+              onCut={preventCopy}
+            />
+          </div>
+
+          <div className="form-group form-checkbox-row">
+            <label htmlFor="includeStreamUsage" className="checkbox-label">
+              <input
+                type="checkbox"
+                id="includeStreamUsage"
+                name="includeStreamUsage"
+                checked={localSettings.includeStreamUsage}
+                onChange={(e) =>
+                  setLocalSettings((prev) => ({ ...prev, includeStreamUsage: e.target.checked }))
+                }
+              />
+              Include usage in stream (OpenAI-compatible; disable if your API rejects it)
+            </label>
           </div>
 
           <div className="form-group">
