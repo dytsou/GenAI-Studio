@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
+import { X, Save, AlertCircle, Eye } from 'lucide-react';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { mergeMaskedSettings, type MaskedSettingsDraft } from '../../utils/settingsMasking';
 import './SettingsModal.css';
 
 export function SettingsModal() {
   const [isOpen, setIsOpen] = useState(false);
+  /** Which secret field is temporarily visible while its reveal button is held (pointer down). */
+  const [pressReveal, setPressReveal] = useState<'baseUrl' | 'apiKey' | null>(null);
   const settings = useSettingsStore();
 
   // Mask stored config values in the UI by not pre-filling text inputs.
@@ -32,12 +34,29 @@ export function SettingsModal() {
         maxTokens: settings.maxTokens,
         systemPrompt: settings.systemPrompt,
       });
+      setPressReveal(null);
       setIsOpen(true);
     };
     window.addEventListener('open-settings', handleOpen);
 
     return () => window.removeEventListener('open-settings', handleOpen);
   }, [settings]);
+
+  useLayoutEffect(() => {
+    if (pressReveal === null) return;
+    const end = () => setPressReveal(null);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.key === 'Enter') end();
+    };
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [pressReveal]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -76,6 +95,7 @@ export function SettingsModal() {
     }
 
     settings.setSettings(result.merged);
+    setPressReveal(null);
     setIsOpen(false);
   };
 
@@ -85,13 +105,25 @@ export function SettingsModal() {
     e.preventDefault();
   };
 
+  const preventCopyUnlessRevealed =
+    (field: 'baseUrl' | 'apiKey') => (e: React.ClipboardEvent<HTMLInputElement>) => {
+      if (pressReveal !== field) e.preventDefault();
+    };
+
   return (
     <div className="modal-overlay">
       <div className="modal-content settings-modal">
         <div className="modal-header">
           <h2>Application Settings</h2>
           {settings.apiKey && (
-            <button className="close-btn" onClick={() => setIsOpen(false)} aria-label="Close Settings">
+            <button
+              className="close-btn"
+              onClick={() => {
+                setPressReveal(null);
+                setIsOpen(false);
+              }}
+              aria-label="Close Settings"
+            >
               <X size={20} />
             </button>
           )}
@@ -107,30 +139,72 @@ export function SettingsModal() {
         <form onSubmit={handleSave} className="settings-form">
           <div className="form-group">
             <label htmlFor="baseUrl">API Base URL</label>
-            <input 
-              type="password"
-              id="baseUrl" 
-              name="baseUrl" 
-              value={localSettings.baseUrl}
-              onChange={handleChange}
-              placeholder={settings.baseUrl || "https://api.openai.com/v1"}
-              onCopy={preventCopy}
-              onCut={preventCopy}
-            />
+            <div className="secret-input-row">
+              <input
+                type={pressReveal === 'baseUrl' ? 'text' : 'password'}
+                id="baseUrl"
+                name="baseUrl"
+                value={localSettings.baseUrl}
+                onChange={handleChange}
+                placeholder={settings.baseUrl || 'https://api.openai.com/v1'}
+                autoComplete="off"
+                onCopy={preventCopyUnlessRevealed('baseUrl')}
+                onCut={preventCopyUnlessRevealed('baseUrl')}
+              />
+              <button
+                type="button"
+                className="secret-reveal-btn"
+                aria-label="Hold to reveal API base URL"
+                title="Hold to show"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  setPressReveal('baseUrl');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setPressReveal('baseUrl');
+                  }
+                }}
+              >
+                <Eye size={18} aria-hidden />
+              </button>
+            </div>
           </div>
 
           <div className="form-group">
             <label htmlFor="apiKey">API Key (Stored locally)</label>
-            <input 
-              type="password" 
-              id="apiKey" 
-              name="apiKey" 
-              value={localSettings.apiKey}
-              onChange={handleChange}
-              placeholder={settings.apiKey ? 'Leave empty to keep existing key' : 'sk-...'}
-              onCopy={preventCopy}
-              onCut={preventCopy}
-            />
+            <div className="secret-input-row">
+              <input
+                type={pressReveal === 'apiKey' ? 'text' : 'password'}
+                id="apiKey"
+                name="apiKey"
+                value={localSettings.apiKey}
+                onChange={handleChange}
+                placeholder={settings.apiKey ? 'Leave empty to keep existing key' : 'sk-...'}
+                autoComplete="off"
+                onCopy={preventCopyUnlessRevealed('apiKey')}
+                onCut={preventCopyUnlessRevealed('apiKey')}
+              />
+              <button
+                type="button"
+                className="secret-reveal-btn"
+                aria-label="Hold to reveal API key"
+                title="Hold to show"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  setPressReveal('apiKey');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setPressReveal('apiKey');
+                  }
+                }}
+              >
+                <Eye size={18} aria-hidden />
+              </button>
+            </div>
           </div>
 
           <div className="form-group">
