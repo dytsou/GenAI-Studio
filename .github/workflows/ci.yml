@@ -48,9 +48,39 @@ jobs:
       - name: Build
         run: pnpm build
 
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/gateway
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: deploy/gateway/pnpm-lock.yaml
+
+      - name: Install gateway dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build gateway
+        run: pnpm run build
+
+      - name: Test gateway
+        run: pnpm test
+
   pages-build:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    needs: quality
+    needs: [ quality, gateway ]
     runs-on: ubuntu-latest
 
     steps:

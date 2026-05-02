@@ -95,6 +95,10 @@ pnpm dev
 - `pnpm lint` - run ESLint
 - `pnpm test` - run Vitest tests
 
+### Hosted gateway (optional)
+
+The Express gateway under `deploy/gateway` is a **separate pnpm package** (not the root `pnpm install`). See [deploy/README.md](deploy/README.md) for `pnpm install`, `pnpm dev`, `pnpm test`, and Docker Compose.
+
 ## Configuration Details
 
 All settings are stored in browser local storage through Zustand persistence.
