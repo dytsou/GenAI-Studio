@@ -7,6 +7,9 @@ export type StreamStatsBarProps = {
   maxOutputTokens: number;
   tokensPerSecond: number | null;
   active: boolean;
+  /** Last `studio_meta` from hosted gateway SSE (Intelligent routing), if any. */
+  studioChosenModel?: string | null;
+  studioMemoryTokensUsed?: number | null;
 };
 
 function formatPercent(used: number, cap: number): string {
@@ -28,9 +31,15 @@ export function StreamStatsBar({
   maxOutputTokens,
   tokensPerSecond,
   active,
+  studioChosenModel,
+  studioMemoryTokensUsed,
 }: StreamStatsBarProps) {
   const tpsLabel =
     tokensPerSecond != null && Number.isFinite(tokensPerSecond) ? `${tokensPerSecond.toFixed(1)} t/s` : '—';
+
+  const showStudioMeta =
+    (studioChosenModel != null && studioChosenModel !== '') ||
+    (studioMemoryTokensUsed != null && Number.isFinite(studioMemoryTokensUsed));
 
   return (
     <div
@@ -55,6 +64,23 @@ export function StreamStatsBar({
       <span className="stream-stats-item">
         <span className="stream-stats-value stream-stats-tps">{tpsLabel}</span>
       </span>
+      {showStudioMeta ? (
+        <>
+          <span className="stream-stats-sep" aria-hidden />
+          {studioChosenModel ? (
+            <span className="stream-stats-item" title="Model reported by gateway (intelligent routing)">
+              <span className="stream-stats-label">Gateway:</span>{' '}
+              <span className="stream-stats-value">{studioChosenModel}</span>
+            </span>
+          ) : null}
+          {studioMemoryTokensUsed != null && Number.isFinite(studioMemoryTokensUsed) ? (
+            <span className="stream-stats-item" title="Long-term memory tokens used for this reply">
+              <span className="stream-stats-label">Mem:</span>{' '}
+              <span className="stream-stats-value">{Math.round(studioMemoryTokensUsed)}</span>
+            </span>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

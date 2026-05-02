@@ -27,6 +27,8 @@ export function Chat() {
     promptTokens: number;
     completionTokens: number;
     tokensPerSecond: number | null;
+    studioChosenModel?: string | null;
+    studioMemoryTokensUsed?: number | null;
   } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [sendQueue, setSendQueue] = useState<QueuedSend[]>([]);
@@ -174,6 +176,8 @@ export function Chat() {
       promptTokens: promptEstimate,
       completionTokens: 0,
       tokensPerSecond: null,
+      studioChosenModel: null,
+      studioMemoryTokensUsed: null,
     });
 
     let receivedUsage = false;
@@ -212,6 +216,8 @@ export function Chat() {
             promptTokens: prev?.promptTokens ?? promptEstimate,
             completionTokens: completionEstimate,
             tokensPerSecond: tps,
+            studioChosenModel: prev?.studioChosenModel ?? null,
+            studioMemoryTokensUsed: prev?.studioMemoryTokensUsed ?? null,
           }));
         } else if (event.type === 'usage') {
           receivedUsage = true;
@@ -220,6 +226,18 @@ export function Chat() {
             promptTokens: u.prompt_tokens ?? prev?.promptTokens ?? promptEstimate,
             completionTokens: u.completion_tokens ?? prev?.completionTokens ?? 0,
             tokensPerSecond: prev?.tokensPerSecond ?? null,
+            studioChosenModel: prev?.studioChosenModel ?? null,
+            studioMemoryTokensUsed: prev?.studioMemoryTokensUsed ?? null,
+          }));
+        } else if (event.type === 'studio_meta') {
+          const m = event.meta;
+          setStreamStats((prev) => ({
+            promptTokens: prev?.promptTokens ?? promptEstimate,
+            completionTokens: prev?.completionTokens ?? 0,
+            tokensPerSecond: prev?.tokensPerSecond ?? null,
+            studioChosenModel: m.chosen_model ?? prev?.studioChosenModel ?? null,
+            studioMemoryTokensUsed:
+              m.memory_tokens_used ?? prev?.studioMemoryTokensUsed ?? null,
           }));
         }
       }
@@ -242,6 +260,8 @@ export function Chat() {
             promptTokens: prev.promptTokens,
             completionTokens: completion,
             tokensPerSecond: tps,
+            studioChosenModel: prev.studioChosenModel,
+            studioMemoryTokensUsed: prev.studioMemoryTokensUsed,
           };
         });
       }
@@ -329,6 +349,8 @@ export function Chat() {
               maxOutputTokens={settings.maxTokens}
               tokensPerSecond={streamStats.tokensPerSecond}
               active={isGenerating}
+              studioChosenModel={streamStats.studioChosenModel}
+              studioMemoryTokensUsed={streamStats.studioMemoryTokensUsed}
             />
           )}
           <Composer
