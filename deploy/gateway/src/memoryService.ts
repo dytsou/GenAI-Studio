@@ -4,12 +4,47 @@ import { autoTagMemoryContent, sanitizeMemoryTags } from "./memoryApiTypes.js";
 const { Pool } = pg;
 
 let poolSingleton: pg.Pool | null | undefined;
+let schemaEnsured: Promise<void> | null = null;
+
+async function ensureMemorySchema(pool: pg.Pool): Promise<void> {
+  // Idempotent schema upgrades for existing persisted volumes.
+  // `deploy/postgres/init.sql` is only applied on first container init.
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS memory_chunks (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      workspace_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      embedding DOUBLE PRECISION[],
+      tags TEXT[] NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(
+    `ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS memory_chunks_workspace_idx ON memory_chunks (workspace_id);`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS memory_chunks_workspace_created_idx ON memory_chunks (workspace_id, created_at DESC);`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS memory_chunks_workspace_tags_gin ON memory_chunks USING GIN (tags);`,
+  );
+}
 
 export function getPgPool(): pg.Pool | null {
   const url = process.env.DATABASE_URL?.trim();
   if (!url) return null;
   if (poolSingleton === undefined) {
     poolSingleton = new Pool({ connectionString: url });
+    schemaEnsured = ensureMemorySchema(poolSingleton).catch((e) => {
+      console.warn(
+        "[memory] failed to ensure schema; memory may be degraded",
+        e,
+      );
+    });
   }
   return poolSingleton;
 }
