@@ -1,19 +1,19 @@
-import { useSettingsStore } from '../stores/useSettingsStore';
-import type { Message } from '../stores/useChatStore';
-import type { ChatStreamUsage } from './streamTypes';
-import { readSseStream } from './sseStudioEvents';
-import { getOrCreateWorkspaceId } from './gatewayWorkspaceId';
+import { useSettingsStore } from "../stores/useSettingsStore";
+import type { Message } from "../stores/useChatStore";
+import type { ChatStreamUsage } from "./streamTypes";
+import { readSseStream } from "./sseStudioEvents";
+import { getOrCreateWorkspaceId } from "./gatewayWorkspaceId";
 
-export type { ChatStreamUsage } from './streamTypes';
+export type { ChatStreamUsage } from "./streamTypes";
 
 type ResponseFormat = Record<string, unknown>;
 
-type TextContentPart = { type: 'text'; text: string };
-type ImageUrlContentPart = { type: 'image_url'; image_url: { url: string } };
+type TextContentPart = { type: "text"; text: string };
+type ImageUrlContentPart = { type: "image_url"; image_url: { url: string } };
 type ChatContentPart = TextContentPart | ImageUrlContentPart;
 
 type ChatCompletionMessage = {
-  role: Message['role'];
+  role: Message["role"];
   content: string | ChatContentPart[];
 };
 
@@ -29,21 +29,34 @@ type ChatCompletionRequestPayload = {
 };
 
 export type ChatStreamEvent =
-  | { type: 'content'; text: string }
-  | { type: 'usage'; usage: ChatStreamUsage }
+  | { type: "content"; text: string }
+  | { type: "usage"; usage: ChatStreamUsage }
   | {
-      type: 'studio_meta';
-      meta: { kind: 'meta'; chosen_model?: string; memory_tokens_used?: number };
+      type: "studio_meta";
+      meta: {
+        kind: "meta";
+        chosen_model?: string;
+        memory_tokens_used?: number;
+      };
     }
   | {
-      type: 'studio_tool';
+      type: "studio_tool";
       tool: {
-        kind: 'tool';
+        kind: "tool";
         id: string;
         name: string;
-        phase: 'start' | 'end' | 'error';
+        phase: "start" | "end" | "error";
         ok?: boolean;
         detail?: string;
+      };
+    }
+  | {
+      type: "studio_memory_injection";
+      memory: {
+        kind: "memory_injection";
+        mode: "disabled" | "auto" | "manual";
+        chunk_ids_injected: string[];
+        memory_tokens_estimate?: number;
       };
     };
 
@@ -51,6 +64,11 @@ export interface IntelligentSendOptions {
   includeSessionMemory: boolean;
   includeGlobalMemory: boolean;
   revealMemoryValues: boolean;
+  memoryOverride?: {
+    includeChunkIds?: string[];
+    excludeChunkIds?: string[];
+    draftHash?: string;
+  } | null;
 }
 
 function clampMemoryTopK(n: number): number {
@@ -64,10 +82,10 @@ async function fetchWithBusyRetry(
 ): Promise<Response> {
   const maxAttempts = 6;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     const res = await execute();
     if (res.status !== 409) return res;
-    let waitMs = Number(res.headers.get('retry-after')) * 1000;
+    let waitMs = Number(res.headers.get("retry-after")) * 1000;
     if (!Number.isFinite(waitMs) || waitMs < 0) waitMs = 2000;
     waitMs = Math.min(waitMs, 8000);
     await new Promise((r) => setTimeout(r, waitMs));
@@ -75,25 +93,27 @@ async function fetchWithBusyRetry(
   const res = await execute();
   if (res.status === 409) {
     await res.body?.cancel();
-    throw new Error('workspace_busy — max retries exceeded');
+    throw new Error("workspace_busy — max retries exceeded");
   }
   return res;
 }
 
 export function buildCompletionMessages(
-  messages: Omit<Message, 'id'>[],
+  messages: Omit<Message, "id">[],
   systemPrompt?: string,
 ): ChatCompletionMessage[] {
   const apiMessages: ChatCompletionMessage[] = [];
   if (systemPrompt) {
-    apiMessages.push({ role: 'system', content: systemPrompt });
+    apiMessages.push({ role: "system", content: systemPrompt });
   }
   for (const msg of messages) {
     if (msg.attachments && msg.attachments.length > 0) {
-      const contentParts: ChatContentPart[] = [{ type: 'text', text: msg.content }];
+      const contentParts: ChatContentPart[] = [
+        { type: "text", text: msg.content },
+      ];
       for (const att of msg.attachments) {
         contentParts.push({
-          type: 'image_url',
+          type: "image_url",
           image_url: { url: att.dataUrl },
         });
       }
@@ -106,7 +126,7 @@ export function buildCompletionMessages(
 }
 
 export async function* streamChatCompletions(
-  messages: Omit<Message, 'id'>[],
+  messages: Omit<Message, "id">[],
   systemPrompt?: string,
   responseFormat?: ResponseFormat,
   abortSignal?: AbortSignal,
@@ -130,10 +150,13 @@ export async function* streamChatCompletions(
   } = s;
 
   if (!apiKey) {
-    throw new Error('API Key is not configured. Please set it in Settings.');
+    throw new Error("API Key is not configured. Please set it in Settings.");
   }
 
-  const apiMessages = buildCompletionMessages(messages, systemPrompt?.trim() || undefined);
+  const apiMessages = buildCompletionMessages(
+    messages,
+    systemPrompt?.trim() || undefined,
+  );
 
   const payload: ChatCompletionRequestPayload = {
     model,
@@ -157,37 +180,59 @@ export async function* streamChatCompletions(
   const signal = abortSignal;
 
   if (useHostedGateway) {
-    const gw = (gatewayBaseUrl || 'http://127.0.0.1:8080').replace(/\/$/, '');
-    const path =
-      useIntelligentMode ? '/v1/intelligent/chat' : '/v1/chat';
+    const gw = (gatewayBaseUrl || "http://127.0.0.1:8080").replace(/\/$/, "");
+    const path = useIntelligentMode ? "/v1/intelligent/chat" : "/v1/chat";
     url = `${gw}${path}`;
     const workspaceId = getOrCreateWorkspaceId();
     headers = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      'X-Upstream-Base-Url': baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl,
-      'X-Workspace-Id': workspaceId,
-      'X-Memory-Enabled': memoryEnabled ? 'true' : 'false',
-      'X-Memory-Top-K': String(clampMemoryTopK(memoryTopK)),
-      'X-Tools-Enabled': toolsEnabled ? 'true' : 'false',
+      "X-Upstream-Base-Url": baseUrl.endsWith("/")
+        ? baseUrl.slice(0, -1)
+        : baseUrl,
+      "X-Workspace-Id": workspaceId,
+      "X-Memory-Enabled": memoryEnabled ? "true" : "false",
+      "X-Memory-Top-K": String(clampMemoryTopK(memoryTopK)),
+      "X-Tools-Enabled": toolsEnabled ? "true" : "false",
     };
     if (useIntelligentMode) {
       const io = intelligentOptions ?? {
         includeSessionMemory: true,
         includeGlobalMemory: true,
         revealMemoryValues: false,
+        memoryOverride: null,
       };
-      headers['X-Studio-Intelligent-Session-Memory'] = io.includeSessionMemory ? 'true' : 'false';
-      headers['X-Studio-Intelligent-Global-Memory'] = io.includeGlobalMemory ? 'true' : 'false';
-      headers['X-Studio-Intelligent-Reveal-Memory'] = io.revealMemoryValues ? 'true' : 'false';
+      headers["X-Studio-Intelligent-Session-Memory"] = io.includeSessionMemory
+        ? "true"
+        : "false";
+      headers["X-Studio-Intelligent-Global-Memory"] = io.includeGlobalMemory
+        ? "true"
+        : "false";
+      headers["X-Studio-Intelligent-Reveal-Memory"] = io.revealMemoryValues
+        ? "true"
+        : "false";
+
+      if (
+        io.memoryOverride &&
+        (io.memoryOverride.includeChunkIds?.length ||
+          io.memoryOverride.excludeChunkIds?.length)
+      ) {
+        (payload as Record<string, unknown>).memory_override = {
+          include_chunk_ids: io.memoryOverride.includeChunkIds ?? [],
+          exclude_chunk_ids: io.memoryOverride.excludeChunkIds ?? [],
+          draft_hash: io.memoryOverride.draftHash,
+        };
+      }
     }
   } else {
-    const completeBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    url = completeBaseUrl.endsWith('/chat/completions')
+    const completeBaseUrl = baseUrl.endsWith("/")
+      ? baseUrl.slice(0, -1)
+      : baseUrl;
+    url = completeBaseUrl.endsWith("/chat/completions")
       ? completeBaseUrl
       : `${completeBaseUrl}/chat/completions`;
     headers = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     };
   }
@@ -195,7 +240,7 @@ export async function* streamChatCompletions(
   const response = await fetchWithBusyRetry(
     () =>
       fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers,
         body: JSON.stringify(payload),
         signal,
@@ -215,15 +260,16 @@ export async function* streamChatCompletions(
   }
 
   if (!response.body) {
-    throw new Error('No streaming body returned from API.');
+    throw new Error("No streaming body returned from API.");
   }
 
   for await (const event of readSseStream(response.body)) {
     if (
-      event.type === 'studio_meta' ||
-      event.type === 'studio_tool' ||
-      event.type === 'usage' ||
-      event.type === 'content'
+      event.type === "studio_meta" ||
+      event.type === "studio_tool" ||
+      event.type === "studio_memory_injection" ||
+      event.type === "usage" ||
+      event.type === "content"
     ) {
       yield event;
     }

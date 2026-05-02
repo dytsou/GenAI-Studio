@@ -1,15 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Square, Paperclip, X, Sparkles, Mic } from 'lucide-react';
+import { Send, Square, Paperclip, X, Sparkles, Mic, BookOpen } from 'lucide-react';
 import type { Attachment } from '../../stores/useChatStore';
 import type { QueuedSend } from './queuedSendTypes';
 import { ComposerQueuedList } from './ComposerQueuedList';
 import { processFile } from '../../utils/attachmentManager';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { transcribeAudio } from '../../api/transcribe';
+import type { MemoryOverrideDraft } from './MemoryDrawer';
+import { MemoryDrawer } from './MemoryDrawer';
 import './Composer.css';
 
 interface ComposerProps {
-  onSend: (content: string, attachments: Attachment[], systemPromptOverride?: string) => void;
+  onSend: (
+    content: string,
+    attachments: Attachment[],
+    systemPromptOverride?: string,
+    memoryOverride?: MemoryOverrideDraft | null,
+  ) => void;
   onStop: () => void;
   isGenerating: boolean;
   sendQueue: QueuedSend[];
@@ -34,6 +41,8 @@ export function Composer({
   const [content, setContent] = useState('');
   const [systemPromptOverride, setSystemPromptOverride] = useState('');
   const [isSystemOverrideEnabled, setIsSystemOverrideEnabled] = useState(false);
+  const [memoryDrawerOpen, setMemoryDrawerOpen] = useState(false);
+  const [memoryOverride, setMemoryOverride] = useState<MemoryOverrideDraft | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -61,10 +70,11 @@ export function Composer({
   const handleSend = () => {
     if (!content.trim() && attachments.length === 0) return;
     const override = isSystemOverrideEnabled ? systemPromptOverride.trim() : '';
-    onSend(content, attachments, override || undefined);
+    onSend(content, attachments, override || undefined, memoryOverride);
     setContent('');
     setSystemPromptOverride('');
     setIsSystemOverrideEnabled(false);
+    setMemoryOverride(null);
     setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
@@ -158,6 +168,18 @@ export function Composer({
         >
           <Sparkles size={14} />
         </button>
+        {settings.useHostedGateway && (
+          <button
+            type="button"
+            className={`composer-system-toggle-btn ${memoryDrawerOpen ? 'active' : ''}`}
+            onClick={() => setMemoryDrawerOpen(true)}
+            disabled={isProcessingFile}
+            title="Select memory for this send"
+            aria-label="Select memory for this send"
+          >
+            <BookOpen size={14} />
+          </button>
+        )}
         {settings.useHostedGateway && (
           <button
             type="button"
@@ -300,6 +322,13 @@ export function Composer({
           />
         </div>
       )}
+
+      <MemoryDrawer
+        open={memoryDrawerOpen}
+        onClose={() => setMemoryDrawerOpen(false)}
+        draftText={content}
+        onOverrideChange={setMemoryOverride}
+      />
     </div>
   );
 }

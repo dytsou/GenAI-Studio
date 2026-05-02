@@ -1,4 +1,5 @@
-import pg from 'pg';
+import pg from "pg";
+import { autoTagMemoryContent, sanitizeMemoryTags } from "./memoryApiTypes.js";
 
 const { Pool } = pg;
 
@@ -27,20 +28,22 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return d === 0 ? 0 : dp / d;
 }
 
-export async function embedText(params: { auth: string; baseUrl: string; text: string }): Promise<
-  number[] | null
-> {
-  const model = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
+export async function embedText(params: {
+  auth: string;
+  baseUrl: string;
+  text: string;
+}): Promise<number[] | null> {
+  const model = process.env.EMBEDDING_MODEL || "text-embedding-3-small";
   const res = await fetch(`${params.baseUrl}/embeddings`, {
-    method: 'POST',
+    method: "POST",
     headers: {
       Authorization: `Bearer ${params.auth}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({ model, input: params.text }),
   });
   if (!res.ok) {
-    console.warn('[memory] embeddings failed', res.status, await res.text());
+    console.warn("[memory] embeddings failed", res.status, await res.text());
     return null;
   }
   const json = (await res.json()) as {
@@ -59,13 +62,16 @@ export async function retrieveTopKChunks(params: {
   const { rows } = await params.pool.query<{
     content: string;
     embedding: number[] | null;
-  }>(`SELECT content, embedding FROM memory_chunks WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 200`, [
-    params.workspaceId,
-  ]);
+  }>(
+    `SELECT content, embedding FROM memory_chunks WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 200`,
+    [params.workspaceId],
+  );
   const scored = rows
     .map((r) => ({
       content: r.content,
-      score: Array.isArray(r.embedding) ? cosineSimilarity(params.embedding, r.embedding) : 0,
+      score: Array.isArray(r.embedding)
+        ? cosineSimilarity(params.embedding, r.embedding)
+        : 0,
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, params.topK)
@@ -73,15 +79,185 @@ export async function retrieveTopKChunks(params: {
   return scored;
 }
 
+export type MemoryChunkDbRow = {
+  id: string;
+  content: string;
+  embedding: number[] | null;
+  created_at: string;
+  tags: string[] | null;
+};
+
+export type MemoryChunkHit = {
+  chunk_id: string;
+  content: string;
+  created_at: string;
+  tags: string[];
+  score: number;
+};
+
+function sortHitsDeterministically(
+  a: MemoryChunkHit,
+  b: MemoryChunkHit,
+): number {
+  if (b.score !== a.score) return b.score - a.score;
+  if (a.created_at !== b.created_at)
+    return a.created_at < b.created_at ? 1 : -1;
+  return a.chunk_id.localeCompare(b.chunk_id);
+}
+
+export async function retrieveTopKChunkHits(params: {
+  pool: pg.Pool;
+  workspaceId: string;
+  embedding: number[];
+  topK: number;
+  /** Scan window; defensive cap to keep JS scoring bounded. */
+  scanLimit?: number;
+}): Promise<MemoryChunkHit[]> {
+  const scanLimit = Math.min(
+    2000,
+    Math.max(50, Math.floor(params.scanLimit ?? 500)),
+  );
+  const { rows } = await params.pool.query<MemoryChunkDbRow>(
+    `SELECT id, content, embedding, created_at, tags
+     FROM memory_chunks
+     WHERE workspace_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [params.workspaceId, scanLimit],
+  );
+  const scored = rows
+    .map((r) => ({
+      chunk_id: r.id,
+      content: r.content,
+      created_at: r.created_at,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      score: Array.isArray(r.embedding)
+        ? cosineSimilarity(params.embedding, r.embedding)
+        : 0,
+    }))
+    .sort(sortHitsDeterministically)
+    .slice(0, params.topK);
+  return scored;
+}
+
+export async function searchChunkHits(params: {
+  pool: pg.Pool;
+  workspaceId: string;
+  embedding: number[];
+  /** If provided, only include chunks with ALL these tags. */
+  tagsAll?: string[];
+  /** ISO bounds (inclusive). */
+  createdFrom?: string;
+  createdTo?: string;
+  limit: number;
+  offset: number;
+  scanLimit?: number;
+}): Promise<{ hits: MemoryChunkHit[]; scanned: number }> {
+  const scanLimit = Math.min(
+    5000,
+    Math.max(50, Math.floor(params.scanLimit ?? 1200)),
+  );
+  const limit = Math.min(50, Math.max(1, Math.floor(params.limit)));
+  const offset = Math.max(0, Math.floor(params.offset));
+
+  const where: string[] = ["workspace_id = $1"];
+  const args: Array<string | number | string[]> = [params.workspaceId];
+
+  if (params.createdFrom) {
+    args.push(params.createdFrom);
+    where.push(`created_at >= $${args.length}`);
+  }
+  if (params.createdTo) {
+    args.push(params.createdTo);
+    where.push(`created_at <= $${args.length}`);
+  }
+  if (params.tagsAll && params.tagsAll.length > 0) {
+    args.push(params.tagsAll);
+    where.push(`tags @> $${args.length}::text[]`);
+  }
+
+  args.push(scanLimit);
+
+  const { rows } = await params.pool.query<MemoryChunkDbRow>(
+    `SELECT id, content, embedding, created_at, tags
+     FROM memory_chunks
+     WHERE ${where.join(" AND ")}
+     ORDER BY created_at DESC
+     LIMIT $${args.length}`,
+    args,
+  );
+
+  const scoredAll = rows
+    .map((r) => ({
+      chunk_id: r.id,
+      content: r.content,
+      created_at: r.created_at,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      score: Array.isArray(r.embedding)
+        ? cosineSimilarity(params.embedding, r.embedding)
+        : 0,
+    }))
+    .sort(sortHitsDeterministically);
+
+  const hits = scoredAll.slice(offset, offset + limit);
+  return { hits, scanned: rows.length };
+}
+
+export async function loadChunksByIds(params: {
+  pool: pg.Pool;
+  workspaceId: string;
+  chunkIds: string[];
+}): Promise<
+  Array<{
+    chunk_id: string;
+    content: string;
+    created_at: string;
+    tags: string[];
+  }>
+> {
+  const ids = Array.from(new Set(params.chunkIds)).filter(Boolean);
+  if (ids.length === 0) return [];
+  const { rows } = await params.pool.query<{
+    id: string;
+    content: string;
+    created_at: string;
+    tags: string[] | null;
+  }>(
+    `SELECT id, content, created_at, tags
+     FROM memory_chunks
+     WHERE workspace_id = $1 AND id = ANY($2::uuid[])`,
+    [params.workspaceId, ids],
+  );
+  const byId = new Map(
+    rows.map((r) => [
+      r.id,
+      {
+        chunk_id: r.id,
+        content: r.content,
+        created_at: r.created_at,
+        tags: Array.isArray(r.tags) ? r.tags : [],
+      },
+    ]),
+  );
+  return ids.flatMap((id) => {
+    const v = byId.get(id);
+    return v ? [v] : [];
+  });
+}
+
 export async function insertMemoryChunk(params: {
   pool: pg.Pool;
   workspaceId: string;
   content: string;
   embedding: number[] | null;
+  tags?: unknown;
 }): Promise<void> {
-  await params.pool.query(`INSERT INTO memory_chunks (workspace_id, content, embedding) VALUES ($1, $2, $3)`, [
-    params.workspaceId,
-    params.content,
-    params.embedding,
-  ]);
+  const tags =
+    params.tags === undefined
+      ? autoTagMemoryContent(params.content)
+      : sanitizeMemoryTags(params.tags);
+  await params.pool.query(
+    `INSERT INTO memory_chunks (workspace_id, content, embedding, tags) VALUES ($1, $2, $3, $4)`,
+    [params.workspaceId, params.content, params.embedding, tags],
+  );
 }

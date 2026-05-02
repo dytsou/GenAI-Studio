@@ -7,11 +7,14 @@ import {
   embedText,
   getPgPool,
   insertMemoryChunk,
+  loadChunksByIds,
   retrieveTopKChunks,
+  retrieveTopKChunkHits,
 } from "./memoryService.js";
+import { createMemoryRoutes } from "./memoryRoutes.js";
 import { chatCompletionSingleText } from "./nonStreamCompletion.js";
 import { buildToolInventory, mcpServersFromEnvJson } from "./toolInventory.js";
-import { sseDone, streamSseUpstream } from "./streamUtil.js";
+import { sseDone, sseWrite, streamSseUpstream } from "./streamUtil.js";
 import {
   assistantTextFromOpenAiCompletionJson,
   saveChatTurnToLongTermMemory,
@@ -36,6 +39,28 @@ function memTopKFromHeader(headerVal: string | undefined): number {
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
+}
+
+function parseChunkIdList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== "string") continue;
+    const s = v.trim();
+    if (!s) continue;
+    // Minimal UUID-ish check; DB lookup is authoritative.
+    if (!/^[0-9a-fA-F-]{8,}$/.test(s)) continue;
+    out.push(s);
+  }
+  return Array.from(new Set(out)).slice(0, 50);
+}
+
+function buildUntrustedMemoryBlock(label: string, items: string[]): string {
+  if (items.length === 0) return "";
+  return (
+    `${label} (Untrusted memory excerpts — verify before trusting):\n` +
+    items.map((c, i) => `(${i + 1}) ${c}`).join("\n---\n")
+  );
 }
 
 async function buildMemorySystemBlock(params: {
@@ -127,6 +152,7 @@ export function createApp(): express.Application {
   app.use(corsMw());
   const jsonLimit = process.env.EXPRESS_JSON_LIMIT?.trim() || "10mb";
   app.use(express.json({ limit: jsonLimit }));
+  app.use(createMemoryRoutes());
 
   function upstreamOr401(
     res: ExpressResponse,
@@ -358,6 +384,8 @@ export function createApp(): express.Application {
       const topK = memTopKFromHeader(req.header("x-memory-top-k"));
       let memoryNotes = "";
       let memoryTokEst = 0;
+      let memoryMode: "disabled" | "auto" | "manual" = "disabled";
+      let injectedChunkIds: string[] = [];
 
       const payload = cloneJsonBody(req.body);
       const rawMessages = [
@@ -365,23 +393,81 @@ export function createApp(): express.Application {
       ];
       const userContextSnippet = extractLastUserTextForRetrieval(rawMessages);
 
-      if (retrieveMemory && workspaceId) {
-        const { text, tokenEst } = await buildMemorySystemBlock({
-          upstream: up,
-          workspaceId,
-          memEnabled: true,
-          topK,
-          label: "Long-term retrieval",
-          userContextSnippet,
-        });
-        if (text) {
-          memoryTokEst = tokenEst;
+      const override = (payload as { memory_override?: unknown })
+        .memory_override as
+        | { include_chunk_ids?: unknown; exclude_chunk_ids?: unknown }
+        | undefined;
+      const includeIds = parseChunkIdList(override?.include_chunk_ids);
+      const excludeIds = new Set(parseChunkIdList(override?.exclude_chunk_ids));
+
+      if (memEnabled && retrieveMemory && workspaceId) {
+        const pool = getPgPool();
+        if (!pool) {
+          memoryMode = "disabled";
+        } else if (includeIds.length > 0) {
+          memoryMode = "manual";
+          const loaded = await loadChunksByIds({
+            pool,
+            workspaceId,
+            chunkIds: includeIds,
+          });
+          const loadedIds = new Set(loaded.map((r) => r.chunk_id));
+          const missing = includeIds.filter((id) => !loadedIds.has(id));
+          if (missing.length > 0) {
+            return res.status(409).json({
+              error: {
+                message: "chunk_unavailable",
+                missing_chunk_ids: missing,
+              },
+            });
+          }
+          injectedChunkIds = includeIds;
+          const text = buildUntrustedMemoryBlock(
+            "Long-term retrieval (manual selection)",
+            loaded.map((r) => r.content),
+          );
+          memoryTokEst = text ? estimateTokens(text) : 0;
           memoryNotes = reveal
             ? text
             : text.replace(/[A-Za-z0-9]/g, (ch) =>
                 Math.random() > 0.35 ? "•" : ch,
               );
+        } else {
+          memoryMode = "auto";
+          const user = userContextSnippet.trim();
+          const queryText = `Long-term retrieval workspace=${workspaceId}${
+            user ? `\n${user}` : ""
+          }`.trim();
+          const emb = await embedText({
+            auth: up.auth,
+            baseUrl: up.baseUrl,
+            text: queryText.slice(0, 2000),
+          });
+          if (emb) {
+            const hits = await retrieveTopKChunkHits({
+              pool,
+              workspaceId,
+              embedding: emb,
+              topK,
+            });
+            const filtered = hits.filter((h) => !excludeIds.has(h.chunk_id));
+            injectedChunkIds = filtered.map((h) => h.chunk_id);
+            const text = buildUntrustedMemoryBlock(
+              "Long-term retrieval",
+              filtered.map((h) => h.content),
+            );
+            if (text) {
+              memoryTokEst = estimateTokens(text);
+              memoryNotes = reveal
+                ? text
+                : text.replace(/[A-Za-z0-9]/g, (ch) =>
+                    Math.random() > 0.35 ? "•" : ch,
+                  );
+            }
+          }
         }
+      } else {
+        memoryMode = "disabled";
       }
 
       const model = String(payload.model || "gpt-4o");
@@ -480,6 +566,15 @@ export function createApp(): express.Application {
         res as ExpressResponse,
         prelude,
       );
+      sseWrite(res as ExpressResponse, {
+        studio: {
+          v: 1,
+          kind: "memory_injection",
+          mode: memoryMode,
+          chunk_ids_injected: injectedChunkIds,
+          memory_tokens_estimate: memoryTokEst,
+        },
+      });
       sseDone(res);
       if (memEnabled) {
         void saveAssistantMemory({

@@ -15,6 +15,7 @@ interface MessageRendererProps {
 export const MessageRenderer = memo(function MessageRenderer({ message, onRegenerate, onEdit }: MessageRendererProps) {
   const isUser = message.role === 'user';
   const cleanContent = DOMPurify.sanitize(message.content);
+  const mem = message.memoryInjection;
   
   const [isEditing, setIsEditing] = useState(false);
   const [draftContent, setDraftContent] = useState(message.content);
@@ -68,6 +69,21 @@ export const MessageRenderer = memo(function MessageRenderer({ message, onRegene
             An error occurred while generating this response.
           </div>
         )}
+
+        {!isUser && mem ? (
+          <details className="message-memory-used">
+            <summary>
+              Memory used: <strong>{mem.mode}</strong> ·{' '}
+              <strong>{mem.chunkIdsInjected.length}</strong> chunks
+              {mem.memoryTokensEstimate != null ? ` · ~${Math.round(mem.memoryTokensEstimate)} tok` : ''}
+            </summary>
+            <div className="message-memory-used-body">
+              <div className="message-memory-used-ids">
+                {mem.chunkIdsInjected.length ? mem.chunkIdsInjected.join(', ') : '(none)'}
+              </div>
+            </div>
+          </details>
+        ) : null}
 
         <div className="message-actions">
            {!isUser && onRegenerate && (

@@ -112,7 +112,12 @@ export function Chat() {
     };
   }, [settings.structuredOutputMode, settings.schemaFields]);
 
-  const handleSend = async (content: string, attachments: Attachment[], promptOverride?: string) => {
+  const handleSend = async (
+    content: string,
+    attachments: Attachment[],
+    promptOverride?: string,
+    memoryOverride?: { includeChunkIds: string[]; excludeChunkIds: string[]; draftHash?: string } | null,
+  ) => {
     if (!activeChatId) return;
 
     if (isGenerating) {
@@ -129,7 +134,7 @@ export function Chat() {
       attachments
     });
 
-    await handleGenerate(promptOverride, activeChatId);
+    await handleGenerate(promptOverride, activeChatId, memoryOverride ?? null);
   };
 
   const handleRegenerate = async () => {
@@ -147,7 +152,11 @@ export function Chat() {
      await handleGenerate(undefined, activeChatId);
   };
 
-  const handleGenerate = async (promptOverride?: string, explicitChatId?: string) => {
+  const handleGenerate = async (
+    promptOverride?: string,
+    explicitChatId?: string,
+    memoryOverride?: { includeChunkIds: string[]; excludeChunkIds: string[]; draftHash?: string } | null,
+  ) => {
     const chatIdForRun = explicitChatId ?? activeChatId;
     if (!chatIdForRun) return;
 
@@ -192,6 +201,7 @@ export function Chat() {
               includeSessionMemory: settings.intelligentIncludeSessionMemory,
               includeGlobalMemory: settings.intelligentIncludeGlobalMemory,
               revealMemoryValues: settings.intelligentRevealMemoryUi,
+              memoryOverride: memoryOverride ?? null,
             }
           : undefined;
       const generator = streamChatCompletions(
@@ -238,6 +248,16 @@ export function Chat() {
             studioMemoryTokensUsed:
               m.memory_tokens_used ?? prev?.studioMemoryTokensUsed ?? null,
           }));
+        } else if (event.type === 'studio_memory_injection') {
+          const mem = event.memory;
+          updateMessage(chatIdForRun, lastMsg.id, {
+            memoryInjection: {
+              mode: mem.mode,
+              chunkIdsInjected: Array.isArray(mem.chunk_ids_injected) ? mem.chunk_ids_injected : [],
+              memoryTokensEstimate:
+                typeof mem.memory_tokens_estimate === 'number' ? mem.memory_tokens_estimate : null,
+            },
+          });
         }
       }
     } catch (err: unknown) {

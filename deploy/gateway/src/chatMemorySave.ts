@@ -4,6 +4,7 @@ import {
 } from "./memoryChatExtract.js";
 import type { Pool } from "pg";
 import { embedText, insertMemoryChunk } from "./memoryService.js";
+import { autoTagMemoryContent } from "./memoryApiTypes.js";
 
 const VERBATIM_ASSISTANT_MIN_CHARS = 24;
 
@@ -71,6 +72,7 @@ export async function saveChatTurnToLongTermMemory(params: {
         workspaceId,
         content: trimmedAssistant.slice(0, 32_000),
         embedding: emb,
+        tags: autoTagMemoryContent(trimmedAssistant),
       });
     } catch (e) {
       console.warn("[memory-chat] verbatim insert failed", e);
@@ -101,6 +103,7 @@ export async function saveChatTurnToLongTermMemory(params: {
         workspaceId,
         content: text.slice(0, 32_000),
         embedding: emb,
+        tags: autoTagMemoryContent(text),
       });
     } catch (e) {
       console.warn("[memory-chat] fact insert failed", e);

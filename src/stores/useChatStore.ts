@@ -1,11 +1,11 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { v4 as uuidv4 } from 'uuid';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { v4 as uuidv4 } from "uuid";
 
-export type Role = 'system' | 'user' | 'assistant';
+export type Role = "system" | "user" | "assistant";
 
 export interface Attachment {
-  type: 'image' | 'pdf';
+  type: "image" | "pdf";
   dataUrl: string; // base64 or object URL
   name: string;
 }
@@ -16,6 +16,11 @@ export interface Message {
   content: string;
   attachments?: Attachment[];
   error?: boolean;
+  memoryInjection?: {
+    mode: "disabled" | "auto" | "manual";
+    chunkIdsInjected: string[];
+    memoryTokensEstimate: number | null;
+  };
 }
 
 export interface Chat {
@@ -32,8 +37,12 @@ interface ChatState {
   createChat: () => string;
   setActiveChat: (id: string | null) => void;
   deleteChat: (id: string) => void;
-  addMessage: (chatId: string, message: Omit<Message, 'id'>) => void;
-  updateMessage: (chatId: string, messageId: string, updates: Partial<Message>) => void;
+  addMessage: (chatId: string, message: Omit<Message, "id">) => void;
+  updateMessage: (
+    chatId: string,
+    messageId: string,
+    updates: Partial<Message>,
+  ) => void;
   deleteMessageAndSubsequent: (chatId: string, messageId: string) => void;
   deleteLastMessage: (chatId: string) => void;
   setChatTitle: (chatId: string, title: string) => void;
@@ -47,7 +56,7 @@ export const useChatStore = create<ChatState>()(
       createChat: () => {
         const newChat: Chat = {
           id: uuidv4(),
-          title: 'New Chat',
+          title: "New Chat",
           messages: [],
           createdAt: Date.now(),
           updatedAt: Date.now(),
@@ -64,7 +73,10 @@ export const useChatStore = create<ChatState>()(
           const newChats = state.chats.filter((c) => c.id !== id);
           return {
             chats: newChats,
-            activeChatId: state.activeChatId === id ? (newChats[0]?.id || null) : state.activeChatId,
+            activeChatId:
+              state.activeChatId === id
+                ? newChats[0]?.id || null
+                : state.activeChatId,
           };
         });
       },
@@ -72,9 +84,11 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const newChats = state.chats.map((c) => {
             if (c.id === chatId) {
-               // Simple auto-title logic on first message
-               const title = c.messages.length === 0 && message.role === 'user'
-                  ? (message.content.slice(0, 30) + (message.content.length > 30 ? '...' : '')) 
+              // Simple auto-title logic on first message
+              const title =
+                c.messages.length === 0 && message.role === "user"
+                  ? message.content.slice(0, 30) +
+                    (message.content.length > 30 ? "..." : "")
                   : c.title;
               return {
                 ...c,
@@ -90,44 +104,55 @@ export const useChatStore = create<ChatState>()(
       },
       updateMessage: (chatId, messageId, updates) => {
         set((state) => {
-           return {
-             chats: state.chats.map((c) => {
-               if(c.id === chatId) {
-                 return { ...c, messages: c.messages.map(m => m.id === messageId ? { ...m, ...updates } : m) }
-               }
-               return c;
-             })
-           }
+          return {
+            chats: state.chats.map((c) => {
+              if (c.id === chatId) {
+                return {
+                  ...c,
+                  messages: c.messages.map((m) =>
+                    m.id === messageId ? { ...m, ...updates } : m,
+                  ),
+                };
+              }
+              return c;
+            }),
+          };
         });
       },
       deleteMessageAndSubsequent: (chatId, messageId) => {
-         set((state) => {
-            return {
-              chats: state.chats.map((c) => {
-                if(c.id === chatId) {
-                   const msgIndex = c.messages.findIndex(m => m.id === messageId);
-                   if(msgIndex === -1) return c;
-                   // Keep the message itself, delete everything after
-                   return { ...c, messages: c.messages.slice(0, msgIndex + 1) };
-                }
-                return c;
-              })
-            }
-         });
+        set((state) => {
+          return {
+            chats: state.chats.map((c) => {
+              if (c.id === chatId) {
+                const msgIndex = c.messages.findIndex(
+                  (m) => m.id === messageId,
+                );
+                if (msgIndex === -1) return c;
+                // Keep the message itself, delete everything after
+                return { ...c, messages: c.messages.slice(0, msgIndex + 1) };
+              }
+              return c;
+            }),
+          };
+        });
       },
       deleteLastMessage: (chatId) => {
-         set((state) => ({
-            chats: state.chats.map((c) => c.id === chatId ? { ...c, messages: c.messages.slice(0, -1) } : c)
-         }));
+        set((state) => ({
+          chats: state.chats.map((c) =>
+            c.id === chatId ? { ...c, messages: c.messages.slice(0, -1) } : c,
+          ),
+        }));
       },
       setChatTitle: (chatId, title) => {
         set((state) => ({
-          chats: state.chats.map((c) => c.id === chatId ? { ...c, title } : c),
+          chats: state.chats.map((c) =>
+            c.id === chatId ? { ...c, title } : c,
+          ),
         }));
-      }
+      },
     }),
     {
-      name: 'chatgpt-chat-storage',
-    }
-  )
+      name: "chatgpt-chat-storage",
+    },
+  ),
 );

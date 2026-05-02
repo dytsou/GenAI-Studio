@@ -63,6 +63,60 @@ describe.skipIf(!databaseUrl)(
       "X-Memory-Enabled": "true",
     };
 
+    it("intelligent: manual include injects exactly selected chunk ids and emits provenance", async () => {
+      const ws = `ws-rt-intel-${randomUUID()}`;
+      await purgeWorkspace(ws);
+
+      const id1 = randomUUID();
+      const id2 = randomUUID();
+      await client!.query(
+        `INSERT INTO memory_chunks (id, workspace_id, content, embedding, tags) VALUES ($1, $2, $3, $4, $5)`,
+        [id1, ws, "Preference: likes concise answers.", null, ["preference"]],
+      );
+      await client!.query(
+        `INSERT INTO memory_chunks (id, workspace_id, content, embedding, tags) VALUES ($1, $2, $3, $4, $5)`,
+        [
+          id2,
+          ws,
+          "Project: GenAI Studio uses hosted gateway.",
+          null,
+          ["project"],
+        ],
+      );
+
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        createLitellmUpstreamFetchMock({
+          ssePayloads: [
+            JSON.stringify({
+              choices: [{ delta: { content: "ok" } }],
+            }),
+            "[DONE]",
+          ],
+        }),
+      );
+
+      const app = createApp();
+      const res = await request(app)
+        .post("/v1/intelligent/chat")
+        .set({
+          ...chatHeaders,
+          "X-Workspace-Id": ws,
+          "x-studio-intelligent-session-memory": "true",
+          "x-studio-intelligent-global-memory": "true",
+        })
+        .send({
+          model: "gpt-runtime",
+          messages: [{ role: "user", content: "hello" }],
+          memory_override: { include_chunk_ids: [id2, id1] },
+        })
+        .expect(200);
+
+      expect(res.text).toContain('"kind":"memory_injection"');
+      expect(res.text).toContain(id1);
+      expect(res.text).toContain(id2);
+      await purgeWorkspace(ws);
+    });
+
     it("facts + SSE: inserts one row per extracted fact", async () => {
       process.env.MEMORY_CHAT_SAVE_STRATEGY = "facts";
       const ws = `ws-rt-${randomUUID()}`;

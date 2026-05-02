@@ -4,18 +4,25 @@
  */
 
 export type StudioMetaPayload = {
-  kind: 'meta';
+  kind: "meta";
   chosen_model?: string;
   memory_tokens_used?: number;
 };
 
 export type StudioToolPayload = {
-  kind: 'tool';
+  kind: "tool";
   id: string;
   name: string;
-  phase: 'start' | 'end' | 'error';
+  phase: "start" | "end" | "error";
   ok?: boolean;
   detail?: string;
+};
+
+export type StudioMemoryInjectionPayload = {
+  kind: "memory_injection";
+  mode: "disabled" | "auto" | "manual";
+  chunk_ids_injected: string[];
+  memory_tokens_estimate?: number;
 };
 
 export type ParsedStreamPayload =
@@ -31,23 +38,26 @@ export type ParsedStreamPayload =
   | Record<string, unknown>;
 
 export type StreamEventFromSse =
-  | { type: 'content'; text: string }
+  | { type: "content"; text: string }
   | {
-      type: 'usage';
+      type: "usage";
       usage: {
         prompt_tokens?: number;
         completion_tokens?: number;
         total_tokens?: number;
       };
     }
-  | { type: 'studio_meta'; meta: StudioMetaPayload }
-  | { type: 'studio_tool'; tool: StudioToolPayload };
+  | { type: "studio_meta"; meta: StudioMetaPayload }
+  | { type: "studio_tool"; tool: StudioToolPayload }
+  | { type: "studio_memory_injection"; memory: StudioMemoryInjectionPayload };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null;
+  return typeof v === "object" && v !== null;
 }
 
-export function parseSseDataPayload(dataStr: string): ParsedStreamPayload | null {
+export function parseSseDataPayload(
+  dataStr: string,
+): ParsedStreamPayload | null {
   try {
     return JSON.parse(dataStr) as ParsedStreamPayload;
   } catch {
@@ -64,31 +74,52 @@ export function eventsFromSseDataJson(dataStr: string): StreamEventFromSse[] {
 
   const out: StreamEventFromSse[] = [];
 
-  if ('studio' in parsed && isRecord(parsed.studio) && typeof parsed.studio.kind === 'string') {
+  if (
+    "studio" in parsed &&
+    isRecord(parsed.studio) &&
+    typeof parsed.studio.kind === "string"
+  ) {
     const sk = parsed.studio as { kind: string };
-    if (sk.kind === 'meta') {
-      out.push({ type: 'studio_meta', meta: parsed.studio as unknown as StudioMetaPayload });
-    } else if (sk.kind === 'tool') {
-      out.push({ type: 'studio_tool', tool: parsed.studio as unknown as StudioToolPayload });
+    if (sk.kind === "meta") {
+      out.push({
+        type: "studio_meta",
+        meta: parsed.studio as unknown as StudioMetaPayload,
+      });
+    } else if (sk.kind === "tool") {
+      out.push({
+        type: "studio_tool",
+        tool: parsed.studio as unknown as StudioToolPayload,
+      });
+    } else if (sk.kind === "memory_injection") {
+      out.push({
+        type: "studio_memory_injection",
+        memory: parsed.studio as unknown as StudioMemoryInjectionPayload,
+      });
     }
   }
 
-  if ('usage' in parsed && isRecord(parsed.usage)) {
+  if ("usage" in parsed && isRecord(parsed.usage)) {
     const u = parsed.usage as {
       prompt_tokens?: number;
       completion_tokens?: number;
       total_tokens?: number;
     };
-    if (u.prompt_tokens != null || u.completion_tokens != null || u.total_tokens != null) {
-      out.push({ type: 'usage', usage: u });
+    if (
+      u.prompt_tokens != null ||
+      u.completion_tokens != null ||
+      u.total_tokens != null
+    ) {
+      out.push({ type: "usage", usage: u });
     }
   }
 
-  if ('choices' in parsed && Array.isArray(parsed.choices)) {
-    const first = parsed.choices[0] as { delta?: { content?: string | null } } | undefined;
+  if ("choices" in parsed && Array.isArray(parsed.choices)) {
+    const first = parsed.choices[0] as
+      | { delta?: { content?: string | null } }
+      | undefined;
     const text = first?.delta?.content;
-    if (typeof text === 'string' && text.length > 0) {
-      out.push({ type: 'content', text });
+    if (typeof text === "string" && text.length > 0) {
+      out.push({ type: "content", text });
     }
   }
 
@@ -99,8 +130,8 @@ export async function* readSseStream(
   body: ReadableStream<Uint8Array>,
 ): AsyncGenerator<StreamEventFromSse, void, undefined> {
   const reader = body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
 
   try {
     while (true) {
@@ -108,13 +139,13 @@ export async function* readSseStream(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split('\n');
-      buffer = chunks.pop() ?? '';
+      const chunks = buffer.split("\n");
+      buffer = chunks.pop() ?? "";
 
       for (const chunk of chunks) {
         const trimmed = chunk.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-        if (!trimmed.startsWith('data: ')) continue;
+        if (!trimmed || trimmed === "data: [DONE]") continue;
+        if (!trimmed.startsWith("data: ")) continue;
         const dataStr = trimmed.slice(6);
         for (const ev of eventsFromSseDataJson(dataStr)) {
           yield ev;

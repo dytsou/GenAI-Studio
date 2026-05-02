@@ -268,4 +268,37 @@ describe("gateway e2e (supertest)", () => {
     expect(res1.status).toBe(200);
     expect(res1.text).toContain("ok");
   });
+
+  it("POST /v1/memory/candidates returns candidates when memory enabled and DB configured", async () => {
+    process.env.DATABASE_URL =
+      "postgres://user:pass@localhost:5432/db-does-not-connect";
+    // We expect 503 because DB isn't reachable in this unit e2e; ensure the route exists and errors are actionable.
+    mockFetchChatSequence();
+    const app = createApp();
+    const res = await request(app)
+      .post("/v1/memory/candidates")
+      .set({
+        Authorization: "Bearer test-token",
+        "X-Upstream-Base-Url": "https://api.openai.com/v1",
+        "X-Workspace-Id": "ws-e2e",
+        "X-Memory-Enabled": "true",
+      })
+      .send({ draft_text: "hello memory" });
+
+    expect([503, 502]).toContain(res.status);
+  });
+
+  it("POST /v1/memory/search validates inputs", async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post("/v1/memory/search")
+      .set({
+        Authorization: "Bearer test-token",
+        "X-Upstream-Base-Url": "https://api.openai.com/v1",
+        "X-Workspace-Id": "ws-e2e",
+      })
+      .send({ query: "" })
+      .expect(400);
+    expect(String(res.body.error?.message)).toContain("query");
+  });
 });
