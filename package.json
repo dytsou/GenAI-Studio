@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "gen:dev-gateway-token": "node ./scripts/generate-dev-gateway-proxy-auth-token.mjs",
+    "setup:dev": "node ./scripts/setup-dev-env.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
