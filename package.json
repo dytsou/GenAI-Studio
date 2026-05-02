@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest run",
+    "gen:dev-gateway-token": "node ./scripts/generate-dev-gateway-proxy-auth-token.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
