@@ -21,6 +21,15 @@ export interface Message {
     chunkIdsInjected: string[];
     memoryTokensEstimate: number | null;
   };
+  recentMemory?: {
+    status: "saving" | "reconciled" | "error";
+    chunks: Array<{
+      chunk_id: string;
+      created_at: string;
+      preview: string;
+      tags: string[];
+    }>;
+  };
 }
 
 export interface Chat {

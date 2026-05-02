@@ -50,6 +50,53 @@ function relevanceBucket(score: number): "high" | "medium" | "low" {
 export function createMemoryRoutes(): express.Router {
   const r = express.Router();
 
+  r.get("/v1/memory/recent", async (req, res) => {
+    // Intentionally does not call upstream; this is a DB-only read.
+    const workspaceId = String(req.header("x-workspace-id") || "").trim();
+    if (!workspaceId) {
+      return res
+        .status(400)
+        .json({ error: { message: "X-Workspace-Id header is required." } });
+    }
+
+    const pool = getPgPool();
+    if (!pool) {
+      return res
+        .status(503)
+        .json({ error: { message: "Memory database is not configured." } });
+    }
+
+    const rawLimit = req.query.limit;
+    const limit = clampLimit(
+      typeof rawLimit === "string" ? Number(rawLimit) : rawLimit,
+      10,
+    );
+
+    const { rows } = await pool.query<{
+      id: string;
+      content: string;
+      created_at: string;
+      tags: string[] | null;
+    }>(
+      `SELECT id, content, created_at, tags
+       FROM memory_chunks
+       WHERE workspace_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [workspaceId, limit],
+    );
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({
+      chunks: rows.map((r) => ({
+        chunk_id: r.id,
+        created_at: r.created_at,
+        preview: makeChunkPreview(r.content),
+        tags: Array.isArray(r.tags) ? r.tags : [],
+      })),
+    });
+  });
+
   r.post("/v1/memory/candidates", async (req, res) => {
     const ur = readUpstream(req);
     if (!ur.ok)

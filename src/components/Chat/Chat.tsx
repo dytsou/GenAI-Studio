@@ -7,6 +7,7 @@ import { MessageRenderer } from './MessageRenderer';
 import { Composer } from './Composer';
 import { SchemaWorkspace } from '../StructuredOutput/SchemaWorkspace';
 import { streamChatCompletions } from '../../api/client';
+import { fetchMemoryRecent } from '../../api/memory';
 import { estimatePromptTokens, estimateTokensFromChars } from '../../utils/tokenEstimate';
 import { StreamStatsBar } from './StreamStatsBar';
 import { ToggleRight, ToggleLeft } from 'lucide-react';
@@ -192,6 +193,10 @@ export function Chat() {
     let aborted = false;
     let firstTokenMs: number | null = null;
     let fullContent = '';
+    const shouldRefreshMemory =
+      settings.useHostedGateway &&
+      settings.useIntelligentMode &&
+      settings.memoryEnabled;
 
     try {
       const systemPrompt = (promptOverride ?? settings.systemPrompt).trim();
@@ -286,6 +291,44 @@ export function Chat() {
       }
       setIsGenerating(false);
       abortControllerRef.current = null;
+
+      if (!aborted && shouldRefreshMemory) {
+        updateMessage(chatIdForRun, lastMsg.id, {
+          recentMemory: {
+            status: 'saving',
+            chunks: [
+              {
+                chunk_id: 'pending',
+                created_at: new Date().toISOString(),
+                preview: fullContent.slice(0, 240),
+                tags: [],
+              },
+            ],
+          },
+        });
+
+        void fetchMemoryRecent({ limit: 12 })
+          .then((r) => {
+            updateMessage(chatIdForRun, lastMsg.id, {
+              recentMemory: { status: 'reconciled', chunks: r.chunks ?? [] },
+            });
+          })
+          .catch(() => {
+            updateMessage(chatIdForRun, lastMsg.id, {
+              recentMemory: {
+                status: 'error',
+                chunks: [
+                  {
+                    chunk_id: 'pending',
+                    created_at: new Date().toISOString(),
+                    preview: fullContent.slice(0, 240),
+                    tags: [],
+                  },
+                ],
+              },
+            });
+          });
+      }
 
       if (!aborted) {
         const { msg, rest } = popFirstSendable(sendQueueRef.current);

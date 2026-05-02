@@ -61,6 +61,39 @@ export type MemorySearchResponse = {
   next_cursor?: string;
 };
 
+export type MemoryRecentResponse = {
+  chunks: MemoryChunkRow[];
+};
+
+export async function fetchMemoryRecent(params: {
+  limit?: number;
+  signal?: AbortSignal;
+}): Promise<MemoryRecentResponse> {
+  const s = useSettingsStore.getState();
+  if (!s.useHostedGateway) throw new Error("Hosted gateway is not enabled.");
+  const gw = (s.gatewayBaseUrl || "http://127.0.0.1:8080").replace(/\/$/, "");
+  const qs = typeof params.limit === "number" ? `?limit=${params.limit}` : "";
+  const url = `${gw}/v1/memory/recent${qs}`;
+  const workspaceId = getOrCreateWorkspaceId();
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${s.apiKey}`,
+      "X-Upstream-Base-Url": s.baseUrl.endsWith("/")
+        ? s.baseUrl.slice(0, -1)
+        : s.baseUrl,
+      "X-Workspace-Id": workspaceId,
+      "X-Memory-Enabled": s.memoryEnabled ? "true" : "false",
+    },
+    signal: params.signal,
+  });
+  if (!res.ok) {
+    throw new Error(`Memory recent failed: ${res.status}`);
+  }
+  return (await res.json()) as MemoryRecentResponse;
+}
+
 export async function searchMemory(params: {
   request: MemorySearchRequest;
   signal?: AbortSignal;

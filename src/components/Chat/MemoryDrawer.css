@@ -87,6 +87,67 @@
   overflow: auto;
 }
 
+.memory-recent {
+  padding: 0.75rem 1rem 0;
+}
+
+.memory-recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.memory-recent-refresh {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 0.3rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.memory-recent-refresh:hover:not(:disabled) {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.memory-recent-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.memory-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0 0.75rem;
+}
+
+.memory-recent-row {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.7rem;
+}
+
+.memory-recent-preview {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.25;
+}
+
+.memory-recent-meta {
+  margin-top: 0.35rem;
+  display: flex;
+  gap: 0.75rem;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+
 .memory-drawer-state {
   padding: 1rem;
   color: var(--text-tertiary);

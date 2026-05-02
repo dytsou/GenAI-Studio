@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Search, Sparkles } from 'lucide-react';
-import { fetchMemoryCandidates, searchMemory, type MemoryChunkRow } from '../../api/memory';
+import { fetchMemoryCandidates, fetchMemoryRecent, searchMemory, type MemoryChunkRow } from '../../api/memory';
 import './MemoryDrawer.css';
 
 export type MemorySelectionState = 'neutral' | 'include' | 'exclude';
@@ -36,6 +36,10 @@ export function MemoryDrawer(props: {
   const { open, onClose, draftText, onOverrideChange } = props;
   const [selection, setSelection] = useState<Record<string, MemorySelectionState>>({});
 
+  const [recent, setRecent] = useState<MemoryChunkRow[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+  const [recentError, setRecentError] = useState<string | null>(null);
+
   const [candidates, setCandidates] = useState<MemoryChunkRow[]>([]);
   const [draftHash, setDraftHash] = useState<string | undefined>(undefined);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
@@ -57,6 +61,18 @@ export function MemoryDrawer(props: {
       override.includeChunkIds.length || override.excludeChunkIds.length ? override : null,
     );
   }, [open, override, onOverrideChange]);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoadingRecent(true);
+    setRecentError(null);
+    void fetchMemoryRecent({ limit: 12 })
+      .then((r) => setRecent(r.chunks ?? []))
+      .catch((e: unknown) => {
+        setRecentError(e instanceof Error ? e.message : 'Failed to load recent');
+      })
+      .finally(() => setLoadingRecent(false));
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -141,6 +157,50 @@ export function MemoryDrawer(props: {
         </div>
 
         <div className="memory-drawer-body">
+          {!isSearching ? (
+            <div className="memory-recent">
+              <div className="memory-recent-header">
+                <span>Recently saved</span>
+                <button
+                  type="button"
+                  className="memory-recent-refresh"
+                  onClick={() => {
+                    setLoadingRecent(true);
+                    setRecentError(null);
+                    void fetchMemoryRecent({ limit: 12 })
+                      .then((r) => setRecent(r.chunks ?? []))
+                      .catch((e: unknown) => {
+                        setRecentError(e instanceof Error ? e.message : 'Failed to load recent');
+                      })
+                      .finally(() => setLoadingRecent(false));
+                  }}
+                  disabled={loadingRecent}
+                >
+                  Refresh
+                </button>
+              </div>
+              {loadingRecent ? (
+                <div className="memory-drawer-state">Loading recent…</div>
+              ) : recentError ? (
+                <div className="memory-drawer-state error">{recentError}</div>
+              ) : recent.length === 0 ? (
+                <div className="memory-drawer-state">No saved memory yet.</div>
+              ) : (
+                <div className="memory-recent-list">
+                  {recent.slice(0, 6).map((c) => (
+                    <div key={c.chunk_id} className="memory-recent-row">
+                      <div className="memory-recent-preview">{c.preview}</div>
+                      <div className="memory-recent-meta">
+                        <span>{new Date(c.created_at).toLocaleString()}</span>
+                        <span>{(c.tags ?? []).slice(0, 2).join(', ')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+
           {!isSearching && loadingCandidates ? (
             <div className="memory-drawer-state">Fetching candidates…</div>
           ) : null}
