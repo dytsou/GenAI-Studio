@@ -25,6 +25,10 @@ export type StudioMemoryInjectionPayload = {
   memory_tokens_estimate?: number;
 };
 
+export type StudioMemorySaveEnqueuedPayload = {
+  kind: "memory_save_enqueued";
+};
+
 export type ParsedStreamPayload =
   | {
       choices?: Array<{ delta?: { content?: string | null } }>;
@@ -49,7 +53,11 @@ export type StreamEventFromSse =
     }
   | { type: "studio_meta"; meta: StudioMetaPayload }
   | { type: "studio_tool"; tool: StudioToolPayload }
-  | { type: "studio_memory_injection"; memory: StudioMemoryInjectionPayload };
+  | { type: "studio_memory_injection"; memory: StudioMemoryInjectionPayload }
+  | {
+      type: "studio_memory_save_enqueued";
+      memory: StudioMemorySaveEnqueuedPayload;
+    };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -94,6 +102,11 @@ export function eventsFromSseDataJson(dataStr: string): StreamEventFromSse[] {
       out.push({
         type: "studio_memory_injection",
         memory: parsed.studio as unknown as StudioMemoryInjectionPayload,
+      });
+    } else if (sk.kind === "memory_save_enqueued") {
+      out.push({
+        type: "studio_memory_save_enqueued",
+        memory: parsed.studio as unknown as StudioMemorySaveEnqueuedPayload,
       });
     }
   }

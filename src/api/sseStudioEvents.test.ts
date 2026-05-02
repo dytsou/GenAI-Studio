@@ -58,4 +58,18 @@ describe("eventsFromSseDataJson", () => {
       },
     ]);
   });
+
+  it("parses studio memory_save_enqueued envelope", () => {
+    const ev = eventsFromSseDataJson(
+      '{"studio":{"v":1,"kind":"memory_save_enqueued"}}',
+    );
+    expect(ev).toEqual([
+      {
+        type: "studio_memory_save_enqueued",
+        memory: expect.objectContaining({
+          kind: "memory_save_enqueued",
+        }),
+      },
+    ]);
+  });
 });

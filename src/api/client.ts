@@ -81,6 +81,12 @@ export type ChatStreamEvent =
         chunk_ids_injected: string[];
         memory_tokens_estimate?: number;
       };
+    }
+  | {
+      type: "studio_memory_save_enqueued";
+      memory: {
+        kind: "memory_save_enqueued";
+      };
     };
 
 export interface IntelligentSendOptions {
@@ -296,6 +302,7 @@ export async function* streamChatCompletions(
       event.type === "studio_meta" ||
       event.type === "studio_tool" ||
       event.type === "studio_memory_injection" ||
+      event.type === "studio_memory_save_enqueued" ||
       event.type === "usage" ||
       event.type === "content"
     ) {

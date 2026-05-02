@@ -583,6 +583,14 @@ export function createApp(): express.Application {
           memory_tokens_estimate: memoryTokEst,
         },
       });
+      if (memEnabled) {
+        sseWrite(res as ExpressResponse, {
+          studio: {
+            v: 1,
+            kind: "memory_save_enqueued",
+          },
+        });
+      }
       sseDone(res);
       if (memEnabled) {
         void saveAssistantMemory({
