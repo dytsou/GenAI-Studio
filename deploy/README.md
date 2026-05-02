@@ -11,7 +11,17 @@ pnpm dev
 pnpm run build
 pnpm test
 pnpm run test:e2e   # HTTP harness: health, MCP discovery, /v1/chat + intelligent routes (mocked upstream)
+pnpm run test:e2e:runtime   # Postgres + mocked upstream (requires DATABASE_URL — see below)
+pnpm run test:all   # unit + harness + runtime (runtime skips without DATABASE_URL; use compose for full run)
 ```
+
+**Runtime DB tests:** from `deploy/`, run `docker compose up -d postgres`, wait until healthy, then in `deploy/gateway`:
+
+`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/studio pnpm run test:e2e:runtime`
+
+Credentials match `deploy/docker-compose.yml`. If Postgres was created earlier with another password, **`docker compose down -v`** (wipes volumes) restores the expected postgres/postgres pair.
+
+The stub in `src/e2e/harness.ts` branches on `json_schema.name` so facts extraction stays separate from ordinary chat mocks.
 
 **`memory_chunks` saves** for **`POST /v1/chat`** with `X-Memory-Enabled: true` follow **`MEMORY_CHAT_SAVE_STRATEGY`** (`facts` vs `verbatim`); caps and rollout semantics are summarized in **`PARITY.md`**.
 

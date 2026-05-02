@@ -81,6 +81,29 @@ jobs:
       - name: Test gateway (e2e harness)
         run: pnpm run test:e2e
 
+      - name: Start Postgres (Compose, init.sql)
+        working-directory: deploy
+        run: docker compose up -d postgres
+
+      - name: Wait for Postgres
+        working-directory: deploy
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T postgres pg_isready -U postgres -d studio; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Postgres failed to become ready"
+          docker compose logs postgres
+          exit 1
+
+      - name: Test gateway (runtime Postgres e2e)
+        working-directory: deploy/gateway
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5433/studio
+        run: pnpm run test:e2e:runtime
+
   pages-build:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     needs: [ quality, gateway ]

@@ -8,9 +8,10 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "test": "vitest run --exclude '**/*.e2e.test.ts'",
+    "test": "vitest run --exclude '**/*.e2e.test.ts' --exclude '**/*.runtime.e2e.test.ts'",
     "test:e2e": "vitest run src/app.e2e.test.ts",
-    "test:all": "vitest run"
+    "test:e2e:runtime": "vitest run src/e2e/memory-database.runtime.e2e.test.ts",
+    "test:all": "pnpm test && pnpm run test:e2e && pnpm run test:e2e:runtime"
   },
   "dependencies": {
     "cors": "^2.8.6",
