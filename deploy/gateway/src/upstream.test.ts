@@ -43,6 +43,14 @@ describe("validateUpstreamUrl", () => {
     });
   });
 
+  it("allows private host when explicitly allowlisted even if block-private is on", () => {
+    vi.stubEnv("GATEWAY_BLOCK_PRIVATE_UPSTREAM", "1");
+    vi.stubEnv("ALLOWED_UPSTREAM_ORIGINS", "http://127.0.0.1:11434");
+    expect(validateUpstreamUrl("http://127.0.0.1:11434/v1")).toEqual({
+      ok: true,
+    });
+  });
+
   it("readUpstream returns 403 when validation fails", () => {
     vi.stubEnv("ALLOWED_UPSTREAM_ORIGINS", "https://only.example");
     const req = {

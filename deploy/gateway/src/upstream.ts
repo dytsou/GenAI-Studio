@@ -40,6 +40,17 @@ export function validateUpstreamUrl(baseUrl: string): ValidateUpstreamResult {
   const origin = normalizeUpstreamOrigin(baseUrl);
   if (!origin) return { ok: false, code: "invalid_upstream_url" };
 
+  const list = process.env.ALLOWED_UPSTREAM_ORIGINS?.trim();
+  if (list) {
+    const allowed = list.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const entry of allowed) {
+      const norm = entry.replace(/\/+$/, "");
+      const ao = normalizeUpstreamOrigin(norm);
+      if (ao && ao === origin) return { ok: true };
+    }
+    return { ok: false, code: "upstream_origin_not_allowed" };
+  }
+
   const blockPrivate =
     ["1", "true", "yes"].includes(
       String(process.env.GATEWAY_BLOCK_PRIVATE_UPSTREAM || "").toLowerCase(),
@@ -54,16 +65,7 @@ export function validateUpstreamUrl(baseUrl: string): ValidateUpstreamResult {
     }
   }
 
-  const list = process.env.ALLOWED_UPSTREAM_ORIGINS?.trim();
-  if (!list) return { ok: true };
-
-  const allowed = list.split(",").map((s) => s.trim()).filter(Boolean);
-  for (const entry of allowed) {
-    const norm = entry.replace(/\/+$/, "");
-    const ao = normalizeUpstreamOrigin(norm);
-    if (ao && ao === origin) return { ok: true };
-  }
-  return { ok: false, code: "upstream_origin_not_allowed" };
+  return { ok: true };
 }
 
 const FORBIDDEN_MESSAGE: Record<
