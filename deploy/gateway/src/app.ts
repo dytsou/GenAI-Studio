@@ -1,7 +1,8 @@
 import express, { type Response as ExpressResponse } from "express";
 import cors from "cors";
 import multer from "multer";
-import { readUpstream } from "./upstream.js";
+import { readUpstream, type ReadUpstreamResult } from "./upstream.js";
+import { extractLastUserTextForRetrieval } from "./retrievalContext.js";
 import {
   embedText,
   getPgPool,
@@ -39,6 +40,7 @@ async function buildMemorySystemBlock(params: {
   memEnabled: boolean;
   topK: number;
   label: string;
+  userContextSnippet: string;
 }): Promise<{ text: string; tokenEst: number; embedOk: boolean }> {
   if (!params.memEnabled || !params.workspaceId)
     return { text: "", tokenEst: 0, embedOk: false };
@@ -46,9 +48,9 @@ async function buildMemorySystemBlock(params: {
   if (!pool) return { text: "", tokenEst: 0, embedOk: false };
 
   try {
-    const lastUserSnippet = ""; // retrieval query from last user omitted for brevity; use pooled recent
+    const user = params.userContextSnippet.trim();
     const queryText =
-      `${params.label} workspace=${params.workspaceId} ${lastUserSnippet}`.trim();
+      `${params.label} workspace=${params.workspaceId}${user ? `\n${user}` : ""}`.trim();
     const emb = await embedText({
       auth: params.upstream.auth,
       baseUrl: params.upstream.baseUrl,
@@ -99,10 +101,35 @@ async function saveAssistantMemory(params: {
   }
 }
 
+function corsMw() {
+  const raw = process.env.ALLOWED_ORIGINS?.trim();
+  if (!raw) return cors({ origin: true, credentials: false });
+  const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  return cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true);
+      if (list.includes(origin)) return cb(null, true);
+      return cb(null, false);
+    },
+    credentials: false,
+  });
+}
+
 export function createApp(): express.Application {
   const app = express();
-  app.use(cors({ origin: true, credentials: false }));
-  app.use(express.json({ limit: "50mb" }));
+  app.use(corsMw());
+  const jsonLimit = process.env.EXPRESS_JSON_LIMIT?.trim() || "10mb";
+  app.use(express.json({ limit: jsonLimit }));
+
+  function upstreamOr401(res: ExpressResponse, ur: ReadUpstreamResult): ur is {
+    ok: true;
+    auth: string;
+    baseUrl: string;
+  } {
+    if (ur.ok) return true;
+    res.status(ur.status).json({ error: { message: ur.message } });
+    return false;
+  }
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "genai-gateway" });
@@ -113,14 +140,9 @@ export function createApp(): express.Application {
   });
 
   app.post("/v1/chat", async (req, res) => {
-    const up = readUpstream(req);
-    if (!up) {
-      return res.status(401).json({
-        error: {
-          message: "Missing Authorization Bearer token or X-Upstream-Base-Url",
-        },
-      });
-    }
+    const ur = readUpstream(req);
+    if (!upstreamOr401(res, ur)) return;
+    const up = { auth: ur.auth, baseUrl: ur.baseUrl };
 
     const workspaceId = String(req.header("x-workspace-id") || "").trim();
     const memEnabled =
@@ -131,6 +153,9 @@ export function createApp(): express.Application {
     const topK = memTopKFromHeader(req.header("x-memory-top-k"));
 
     const bodyPayload = cloneJsonBody(req.body);
+    const userContextSnippet = extractLastUserTextForRetrieval(
+      bodyPayload.messages,
+    );
 
     let memoryTokEstTotal = 0;
 
@@ -142,6 +167,7 @@ export function createApp(): express.Application {
         memEnabled,
         topK,
         label,
+        userContextSnippet,
       });
       if (text) memoryTokEstTotal += tokenEst;
       if (text) memBlocks.push(text);
@@ -232,23 +258,26 @@ export function createApp(): express.Application {
   });
 
   app.post("/v1/intelligent/chat", async (req, res) => {
-    const up = readUpstream(req);
-    if (!up) {
-      return res.status(401).json({
+    const ur = readUpstream(req);
+    if (!upstreamOr401(res, ur)) return;
+    const up = { auth: ur.auth, baseUrl: ur.baseUrl };
+
+    const workspaceId = String(req.header("x-workspace-id") || "").trim();
+    if (!workspaceId) {
+      return res.status(400).json({
         error: {
-          message: "Missing Authorization Bearer token or X-Upstream-Base-Url",
+          message: "X-Workspace-Id header is required for intelligent chat.",
         },
       });
     }
 
-    const workspaceId = String(req.header("x-workspace-id") || "").trim();
     const memEnabled =
       String(req.header("x-memory-enabled") || "false").toLowerCase() ===
       "true";
     const toolsEnabled =
       String(req.header("x-tools-enabled") || "false").toLowerCase() === "true";
 
-    const wsKey = workspaceId || "default_ws";
+    const wsKey = workspaceId;
     if (intelligentBusyWs.has(wsKey)) {
       res.setHeader("Retry-After", "2");
       return res.status(409).json({ error: { message: "workspace_busy" } });
@@ -269,46 +298,40 @@ export function createApp(): express.Application {
           req.header("x-studio-intelligent-reveal-memory") || "false",
         ).toLowerCase() === "true";
 
-      const memEnabledAny = sessionMem || globalMem;
+      /** One retrieval pass (`memory_chunks` is not tier-split); tier headers only enable/disable injection. */
+      const retrieveMemory = sessionMem || globalMem;
       const topK = memTopKFromHeader(req.header("x-memory-top-k"));
       let memoryNotes = "";
-
       let memoryTokEst = 0;
-      const poolBlocks: string[] = [];
-      const pushBlock = async (lbl: string) => {
-        if (!memEnabledAny) return;
-        const tierOn = lbl.includes("session") ? sessionMem : globalMem;
-        if (!tierOn) return;
 
+      const payload = cloneJsonBody(req.body);
+      const rawMessages = [
+        ...(payload.messages as Array<{ role: string; content: unknown }>),
+      ];
+      const userContextSnippet =
+        extractLastUserTextForRetrieval(rawMessages);
+
+      if (retrieveMemory && workspaceId) {
         const { text, tokenEst } = await buildMemorySystemBlock({
           upstream: up,
           workspaceId,
           memEnabled: true,
           topK,
-          label: lbl,
+          label: "Long-term retrieval",
+          userContextSnippet,
         });
         if (text) {
-          memoryTokEst += tokenEst;
-          const shown = reveal
+          memoryTokEst = tokenEst;
+          memoryNotes = reveal
             ? text
             : text.replace(/[A-Za-z0-9]/g, (ch) =>
                 Math.random() > 0.35 ? "•" : ch,
               );
-          poolBlocks.push(shown);
         }
-      };
+      }
 
-      await pushBlock("Session-tier");
-      await pushBlock("Global-tier");
-      if (poolBlocks.length) memoryNotes = poolBlocks.join("\n\n");
-
-      const payload = cloneJsonBody(req.body);
       const model = String(payload.model || "gpt-4o");
       const thinkModel = process.env.GATEWAY_THINK_MODEL || model;
-
-      const rawMessages = [
-        ...(payload.messages as Array<{ role: string; content: unknown }>),
-      ];
 
       const userDigest = rawMessages
         .filter((m) => m.role === "user")
@@ -415,7 +438,9 @@ export function createApp(): express.Application {
     } catch (e) {
       console.error("[v1/intelligent/chat]", e);
       if (!res.headersSent)
-        res.status(500).json({ error: { message: String(e) } });
+        res.status(500).json({
+          error: { message: "Gateway internal error." },
+        });
       try {
         if (!res.writableEnded) res.end();
       } catch {
@@ -427,14 +452,9 @@ export function createApp(): express.Application {
   });
 
   app.post("/v1/transcribe", upload.single("audio"), async (req, res) => {
-    const up = readUpstream(req);
-    if (!up) {
-      return res.status(401).json({
-        error: {
-          message: "Missing Authorization Bearer token or X-Upstream-Base-Url",
-        },
-      });
-    }
+    const ur = readUpstream(req);
+    if (!upstreamOr401(res, ur)) return;
+    const up = { auth: ur.auth, baseUrl: ur.baseUrl };
 
     const fileBuf = req.file?.buffer;
     if (!fileBuf?.length) {
