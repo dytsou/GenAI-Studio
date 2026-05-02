@@ -205,6 +205,8 @@ export function createApp(): express.Application {
     const topK = memTopKFromHeader(req.header("x-memory-top-k"));
 
     const bodyPayload = cloneJsonBody(req.body);
+    // Gateway-only input (OpenAI-compatible upstream rejects unknown params).
+    delete (bodyPayload as { memory_override?: unknown }).memory_override;
     const userContextSnippet = extractLastUserTextForRetrieval(
       bodyPayload.messages,
     );
@@ -407,6 +409,8 @@ export function createApp(): express.Application {
         | undefined;
       const includeIds = parseChunkIdList(override?.include_chunk_ids);
       const excludeIds = new Set(parseChunkIdList(override?.exclude_chunk_ids));
+      // Gateway-only input (OpenAI-compatible upstream rejects unknown params).
+      delete (payload as { memory_override?: unknown }).memory_override;
 
       if (memEnabled && retrieveMemory && workspaceId) {
         const pool = getPgPool();

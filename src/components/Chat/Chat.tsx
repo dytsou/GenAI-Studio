@@ -255,11 +255,15 @@ export function Chat() {
           }));
         } else if (event.type === 'studio_memory_injection') {
           const mem = event.memory;
+          const chunksInjectedRaw =
+            typeof mem === 'object' && mem !== null
+              ? (mem as Record<string, unknown>).chunks_injected
+              : undefined;
           updateMessage(chatIdForRun, lastMsg.id, {
             memoryInjection: {
               mode: mem.mode,
               chunkIdsInjected: Array.isArray(mem.chunk_ids_injected) ? mem.chunk_ids_injected : [],
-              chunksInjected: Array.isArray((mem as any).chunks_injected) ? (mem as any).chunks_injected : undefined,
+              chunksInjected: Array.isArray(chunksInjectedRaw) ? chunksInjectedRaw : undefined,
               memoryTokensEstimate:
                 typeof mem.memory_tokens_estimate === 'number' ? mem.memory_tokens_estimate : null,
             },
