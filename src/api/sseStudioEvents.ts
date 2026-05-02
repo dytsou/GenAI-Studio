@@ -26,6 +26,7 @@ export type StudioMemoryInjectionPayload = {
     chunk_id: string;
     tags: string[];
     keyphrases: string[];
+    preview: string;
   }>;
   memory_tokens_estimate?: number;
 };

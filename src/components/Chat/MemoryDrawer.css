@@ -156,9 +156,10 @@
   color: var(--text-secondary);
 }
 
-.memory-keyphrase-empty {
-  color: var(--text-tertiary);
-  font-size: 0.85rem;
+.memory-keyphrase-fallback {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.25;
 }
 
 .memory-recent-meta {

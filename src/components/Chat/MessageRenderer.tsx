@@ -92,7 +92,7 @@ export const MessageRenderer = memo(function MessageRenderer({ message, onRegene
                             key={`${c.chunk_id}:none`}
                             className="message-memory-chip empty"
                           >
-                            No keywords
+                            {c.preview}
                           </span>,
                         ],
                   )}

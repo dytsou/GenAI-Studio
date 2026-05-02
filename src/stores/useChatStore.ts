@@ -23,6 +23,7 @@ export interface Message {
       chunk_id: string;
       tags: string[];
       keyphrases: string[];
+      preview: string;
     }>;
     memoryTokensEstimate: number | null;
   };

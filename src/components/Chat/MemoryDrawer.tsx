@@ -126,7 +126,7 @@ export function MemoryDrawer(props: {
 
   const renderKeyphrases = (c: MemoryChunkRow) => {
     const phrases = Array.isArray(c.keyphrases) ? c.keyphrases.filter(Boolean) : [];
-    if (!phrases.length) return <span className="memory-keyphrase-empty">No keywords</span>;
+    if (!phrases.length) return <span className="memory-keyphrase-fallback">{c.preview}</span>;
     return phrases.slice(0, 12).map((k) => (
       <span key={`${c.chunk_id}:${k}`} className="memory-keyphrase">
         {k}

@@ -20,6 +20,7 @@ import {
   saveChatTurnToLongTermMemory,
 } from "./chatMemorySave.js";
 import { extractMemoryKeyphrases } from "./memoryKeyphrasesExtract.js";
+import { makeChunkPreview } from "./memoryApiTypes.js";
 
 function cloneJsonBody(raw: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(raw ?? {})) as Record<string, unknown>;
@@ -591,6 +592,7 @@ export function createApp(): express.Application {
         chunk_id: string;
         tags: string[];
         keyphrases: string[];
+        preview: string;
       }> = [];
       try {
         const pool = getPgPool();
@@ -605,6 +607,7 @@ export function createApp(): express.Application {
             chunk_id: c.chunk_id,
             tags: c.tags,
             keyphrases: c.keyphrases,
+            preview: makeChunkPreview(c.content),
           }));
         }
       } catch {
