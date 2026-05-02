@@ -8,7 +8,9 @@ import { embedText, insertMemoryChunk } from "./memoryService.js";
 const VERBATIM_ASSISTANT_MIN_CHARS = 24;
 
 /** Assistant plain text from a non-streaming OpenAI-compatible completion payload. */
-export function assistantTextFromOpenAiCompletionJson(envelope: unknown): string {
+export function assistantTextFromOpenAiCompletionJson(
+  envelope: unknown,
+): string {
   if (!envelope || typeof envelope !== "object") return "";
   const content = (
     envelope as {
@@ -52,7 +54,10 @@ export async function saveChatTurnToLongTermMemory(params: {
   const trimmedAssistant = params.assistantText.trim();
 
   if (strategy === "verbatim") {
-    if (!trimmedAssistant || trimmedAssistant.length < VERBATIM_ASSISTANT_MIN_CHARS)
+    if (
+      !trimmedAssistant ||
+      trimmedAssistant.length < VERBATIM_ASSISTANT_MIN_CHARS
+    )
       return;
     try {
       const emb =

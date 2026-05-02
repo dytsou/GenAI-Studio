@@ -154,9 +154,9 @@ describe("gateway e2e (supertest)", () => {
       })
       .expect(200);
 
-    expect(String(res.headers["content-type"]).includes("application/json")).toBe(
-      true,
-    );
+    expect(
+      String(res.headers["content-type"]).includes("application/json"),
+    ).toBe(true);
     expect(res.body.choices?.[0]?.message?.content).toBe("Short JSON reply.");
     expect(res.body.id).toBe("cmpl-json-nonstream-e2e");
   });

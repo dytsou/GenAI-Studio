@@ -25,9 +25,7 @@ export function readFactMaxChars(): number {
 }
 
 export function readFactsMaxTotalChars(): number {
-  const n = Number(
-    process.env.MEMORY_CHAT_FACTS_MAX_TOTAL_CHARS ?? "32000",
-  );
+  const n = Number(process.env.MEMORY_CHAT_FACTS_MAX_TOTAL_CHARS ?? "32000");
   if (!Number.isFinite(n) || n < 64) return 32000;
   return Math.min(128_000, Math.floor(n));
 }
@@ -212,8 +210,9 @@ export function extractContentJsonFromCompletion(
   envelope: unknown,
 ): unknown | null {
   if (!envelope || typeof envelope !== "object") return null;
-  const c = (envelope as { choices?: Array<{ message?: { content?: unknown } }> })
-    ?.choices?.[0]?.message?.content;
+  const c = (
+    envelope as { choices?: Array<{ message?: { content?: unknown } }> }
+  )?.choices?.[0]?.message?.content;
 
   if (c == null) return null;
   if (typeof c === "object") return c;

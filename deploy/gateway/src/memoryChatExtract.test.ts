@@ -44,10 +44,11 @@ describe("sanitizeAndCapFacts", () => {
   });
 
   it("caps item count and total chars", () => {
-    const out = sanitizeAndCapFacts(
-      ["aa", "bb", "cc"],
-      { maxItems: 2, maxPerFactChars: 100, maxTotalChars: 4 },
-    );
+    const out = sanitizeAndCapFacts(["aa", "bb", "cc"], {
+      maxItems: 2,
+      maxPerFactChars: 100,
+      maxTotalChars: 4,
+    });
     expect(out.length).toBeLessThanOrEqual(2);
     expect(out.join("").length).toBeLessThanOrEqual(4);
   });
@@ -82,7 +83,7 @@ describe("parseFactsFromMessageBody", () => {
 
   it("rejects malformed", () => {
     expect(parseFactsFromMessageBody({})).toBeNull();
-    expect(parseFactsFromMessageBody('{bad')).toBeNull();
+    expect(parseFactsFromMessageBody("{bad")).toBeNull();
   });
 });
 
@@ -108,8 +109,9 @@ describe("extractChatMemoryFacts (mocked fetch)", () => {
     process.env.MEMORY_CHAT_SAVE_STRATEGY = "facts";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(JSON.stringify({ not: "completion" }), { status: 200 }),
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ not: "completion" }), { status: 200 }),
       ),
     );
   });
@@ -124,9 +126,7 @@ describe("extractChatMemoryFacts (mocked fetch)", () => {
     spy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          choices: [
-            { message: { content: '{"facts":["User prefers tea"]}' } },
-          ],
+          choices: [{ message: { content: '{"facts":["User prefers tea"]}' } }],
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),

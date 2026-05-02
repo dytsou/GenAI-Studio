@@ -238,8 +238,9 @@ export function createApp(): express.Application {
     }
 
     const contentType = upstreamResp.headers.get("content-type") ?? "";
-    const isEventStream =
-      contentType.toLowerCase().includes("text/event-stream");
+    const isEventStream = contentType
+      .toLowerCase()
+      .includes("text/event-stream");
     const pool = getPgPool();
     const lastUserForSave = userContextSnippet;
     const chatModel = String(bodyPayload.model ?? "");
