@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Search, Sparkles } from 'lucide-react';
-import { fetchMemoryCandidates, fetchMemoryRecent, searchMemory, type MemoryChunkRow } from '../../api/memory';
+import { X, Search, Sparkles, Trash2 } from 'lucide-react';
+import {
+  deleteMemoryChunk,
+  fetchMemoryCandidates,
+  fetchMemoryRecent,
+  searchMemory,
+  type MemoryChunkRow,
+} from '../../api/memory';
 import './MemoryDrawer.css';
 
 export type MemorySelectionState = 'neutral' | 'include' | 'exclude';
@@ -49,6 +55,7 @@ export function MemoryDrawer(props: {
   const [hits, setHits] = useState<MemoryChunkRow[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Record<string, boolean>>({});
 
   const debouncedDraft = useDebouncedValue(draftText.trim(), 550);
   const abortRef = useRef<AbortController | null>(null);
@@ -110,6 +117,72 @@ export function MemoryDrawer(props: {
       setSearchError(e instanceof Error ? e.message : 'Search failed');
     } finally {
       setLoadingSearch(false);
+    }
+  };
+
+  const refreshRecent = () => {
+    setLoadingRecent(true);
+    setRecentError(null);
+    void fetchMemoryRecent({ limit: 12 })
+      .then((r) => setRecent(r.chunks ?? []))
+      .catch((e: unknown) => {
+        setRecentError(e instanceof Error ? e.message : 'Failed to load recent');
+      })
+      .finally(() => setLoadingRecent(false));
+  };
+
+  const refreshCandidates = () => {
+    if (!debouncedDraft) return;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setLoadingCandidates(true);
+    setCandidateError(null);
+    void fetchMemoryCandidates({ draftText: debouncedDraft, signal: ac.signal })
+      .then((r) => {
+        setCandidates(r.candidates ?? []);
+        setDraftHash(r.draft_hash || undefined);
+      })
+      .catch((e: unknown) => {
+        setCandidateError(e instanceof Error ? e.message : 'Failed to load candidates');
+      })
+      .finally(() => setLoadingCandidates(false));
+  };
+
+  const handleDelete = async (
+    chunkId: string,
+    origin: 'recent' | 'candidates' | 'search',
+  ) => {
+    const ok = window.confirm('Delete this memory chunk?');
+    if (!ok) return;
+
+    // Optimistic remove + selection cleanup.
+    if (origin === 'recent')
+      setRecent((prev) => prev.filter((c) => c.chunk_id !== chunkId));
+    else if (origin === 'candidates')
+      setCandidates((prev) => prev.filter((c) => c.chunk_id !== chunkId));
+    else setHits((prev) => prev.filter((c) => c.chunk_id !== chunkId));
+
+    setSelection((prev) => {
+      if (!(chunkId in prev)) return prev;
+      const next = { ...prev };
+      delete next[chunkId];
+      return next;
+    });
+
+    setDeleting((prev) => ({ ...prev, [chunkId]: true }));
+    try {
+      await deleteMemoryChunk({ chunkId });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Delete failed';
+      if (origin === 'recent') setRecentError(msg);
+      else if (origin === 'candidates') setCandidateError(msg);
+      else setSearchError(msg);
+    } finally {
+      setDeleting((prev) => ({ ...prev, [chunkId]: false }));
+      if (origin === 'recent') refreshRecent();
+      else if (origin === 'candidates') refreshCandidates();
+      else void runSearch();
     }
   };
 
@@ -175,14 +248,7 @@ export function MemoryDrawer(props: {
                   type="button"
                   className="memory-recent-refresh"
                   onClick={() => {
-                    setLoadingRecent(true);
-                    setRecentError(null);
-                    void fetchMemoryRecent({ limit: 12 })
-                      .then((r) => setRecent(r.chunks ?? []))
-                      .catch((e: unknown) => {
-                        setRecentError(e instanceof Error ? e.message : 'Failed to load recent');
-                      })
-                      .finally(() => setLoadingRecent(false));
+                    refreshRecent();
                   }}
                   disabled={loadingRecent}
                 >
@@ -200,6 +266,16 @@ export function MemoryDrawer(props: {
                   {recent.slice(0, 6).map((c) => (
                     <div key={c.chunk_id} className="memory-recent-row">
                       <div className="memory-recent-keyphrases">{renderKeyphrases(c)}</div>
+                      <button
+                        type="button"
+                        className="memory-row-delete"
+                        onClick={() => void handleDelete(c.chunk_id, 'recent')}
+                        aria-label="Delete memory chunk"
+                        title="Delete"
+                        disabled={!!deleting[c.chunk_id]}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                       <div className="memory-recent-meta">
                         <span>{new Date(c.created_at).toLocaleString()}</span>
                         <span>{(c.tags ?? []).slice(0, 2).join(', ')}</span>
@@ -231,34 +307,52 @@ export function MemoryDrawer(props: {
               {list.map((c) => {
                 const st = selection[c.chunk_id] ?? 'neutral';
                 return (
-                  <button
-                    key={c.chunk_id}
-                    className={`memory-chunk-row state-${st}`}
-                    onClick={() =>
-                      setSelection((prev) => ({
-                        ...prev,
-                        [c.chunk_id]: cycleState(prev[c.chunk_id] ?? 'neutral'),
-                      }))
-                    }
-                    aria-label={`Memory chunk ${c.rank ?? ''} ${st}`}
-                    title="Click to cycle: include → exclude → neutral"
-                  >
-                    <div className="memory-chunk-top">
-                      <span className="memory-chunk-rank">
-                        {isSearching ? `#${c.rank ?? '—'}` : `Candidate #${c.rank ?? '—'}`}
-                      </span>
-                      <span className="memory-chunk-bucket">{c.relevance_bucket ?? ''}</span>
-                      <span className="memory-chunk-time">{new Date(c.created_at).toLocaleString()}</span>
-                    </div>
-                    <div className="memory-chunk-keyphrases">{renderKeyphrases(c)}</div>
-                    <div className="memory-chunk-tags">
-                      {(c.tags ?? []).slice(0, 6).map((t) => (
-                        <span key={t} className="memory-tag">
-                          {t}
+                  <div key={c.chunk_id} className={`memory-chunk-rowWrap state-${st}`}>
+                    <button
+                      type="button"
+                      className="memory-chunk-row"
+                      onClick={() =>
+                        setSelection((prev) => ({
+                          ...prev,
+                          [c.chunk_id]: cycleState(prev[c.chunk_id] ?? 'neutral'),
+                        }))
+                      }
+                      aria-label={`Memory chunk ${c.rank ?? ''} ${st}`}
+                      title="Click to cycle: include → exclude → neutral"
+                      disabled={!!deleting[c.chunk_id]}
+                    >
+                      <div className="memory-chunk-top">
+                        <span className="memory-chunk-rank">
+                          {isSearching ? `#${c.rank ?? '—'}` : `Candidate #${c.rank ?? '—'}`}
                         </span>
-                      ))}
-                    </div>
-                  </button>
+                        <span className="memory-chunk-bucket">{c.relevance_bucket ?? ''}</span>
+                        <span className="memory-chunk-time">{new Date(c.created_at).toLocaleString()}</span>
+                      </div>
+                      <div className="memory-chunk-keyphrases">{renderKeyphrases(c)}</div>
+                      <div className="memory-chunk-tags">
+                        {(c.tags ?? []).slice(0, 6).map((t) => (
+                          <span key={t} className="memory-tag">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="memory-row-delete"
+                      onClick={() =>
+                        void handleDelete(
+                          c.chunk_id,
+                          isSearching ? 'search' : 'candidates',
+                        )
+                      }
+                      aria-label="Delete memory chunk"
+                      title="Delete"
+                      disabled={!!deleting[c.chunk_id]}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 );
               })}
             </div>

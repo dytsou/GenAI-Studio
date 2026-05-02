@@ -132,6 +132,7 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   padding: 0.6rem 0.7rem;
+  position: relative;
 }
 
 .memory-recent-preview {
@@ -186,6 +187,10 @@
   padding: 0.75rem 1rem 1rem;
 }
 
+.memory-chunk-rowWrap {
+  position: relative;
+}
+
 .memory-chunk-row {
   text-align: left;
   border: 1px solid var(--border-subtle);
@@ -195,20 +200,46 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  width: 100%;
 }
 
 .memory-chunk-row:hover {
   border-color: var(--border-focus);
 }
 
-.memory-chunk-row.state-include {
+.memory-chunk-rowWrap.state-include .memory-chunk-row {
   border-color: rgba(34, 197, 94, 0.55);
   background: rgba(34, 197, 94, 0.08);
 }
 
-.memory-chunk-row.state-exclude {
+.memory-chunk-rowWrap.state-exclude .memory-chunk-row {
   border-color: rgba(239, 68, 68, 0.55);
   background: rgba(239, 68, 68, 0.08);
+}
+
+.memory-row-delete {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+}
+
+.memory-row-delete:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.memory-row-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .memory-chunk-top {

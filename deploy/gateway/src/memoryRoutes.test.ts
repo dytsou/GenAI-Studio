@@ -22,14 +22,12 @@ describe("memory routes", () => {
   });
 
   it("DELETE /v1/memory/chunks/:chunk_id returns 503 when DB missing", async () => {
-    const old = process.env.DATABASE_URL;
-    delete process.env.DATABASE_URL;
+    vi.spyOn(memoryService, "getPgPool").mockReturnValue(null);
     const app = createApp();
     await request(app)
       .delete("/v1/memory/chunks/00000000-0000-0000-0000-000000000000")
       .set({ Authorization: "Bearer k", "X-Workspace-Id": "ws" })
       .expect(503);
-    if (old) process.env.DATABASE_URL = old;
   });
 
   it("DELETE /v1/memory/chunks/:chunk_id returns 204 (idempotent)", async () => {
@@ -51,14 +49,12 @@ describe("memory routes", () => {
     expect(String(res.body.error?.message)).toContain("Workspace");
   });
   it("GET /v1/memory/recent returns 503 when DB missing", async () => {
-    const old = process.env.DATABASE_URL;
-    delete process.env.DATABASE_URL;
+    vi.spyOn(memoryService, "getPgPool").mockReturnValue(null);
     const app = createApp();
     await request(app)
       .get("/v1/memory/recent")
       .set({ "X-Workspace-Id": "ws" })
       .expect(503);
-    if (old) process.env.DATABASE_URL = old;
   });
   it("GET /v1/memory/recent returns chunks with preview, tags, and keyphrases", async () => {
     vi.spyOn(memoryService, "getPgPool").mockReturnValue({

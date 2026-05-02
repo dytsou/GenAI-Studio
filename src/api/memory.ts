@@ -123,3 +123,27 @@ export async function searchMemory(params: {
   }
   return (await res.json()) as MemorySearchResponse;
 }
+
+export async function deleteMemoryChunk(params: {
+  chunkId: string;
+  signal?: AbortSignal;
+}): Promise<void> {
+  const s = useSettingsStore.getState();
+  if (!s.useHostedGateway) throw new Error("Hosted gateway is not enabled.");
+  const gw = (s.gatewayBaseUrl || "http://127.0.0.1:8080").replace(/\/$/, "");
+  const url = `${gw}/v1/memory/chunks/${encodeURIComponent(params.chunkId)}`;
+  const workspaceId = getOrCreateWorkspaceId();
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${s.apiKey}`,
+      "X-Workspace-Id": workspaceId,
+      "X-Memory-Enabled": s.memoryEnabled ? "true" : "false",
+    },
+    signal: params.signal,
+  });
+  if (res.status === 204) return;
+  if (!res.ok) {
+    throw new Error(`Memory delete failed: ${res.status}`);
+  }
+}
