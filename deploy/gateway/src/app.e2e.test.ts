@@ -63,6 +63,51 @@ function mockFetchChatSequence() {
     );
 }
 
+function mockFetchChatSequenceThink400() {
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const bodyRaw = typeof init?.body === "string" ? init.body : "";
+        let body: { stream?: boolean } = {};
+        try {
+          body = bodyRaw ? JSON.parse(bodyRaw) : {};
+        } catch {
+          return new Response("bad json", { status: 500 });
+        }
+
+        if (url.includes("/chat/completions")) {
+          if (!body.stream) {
+            return new Response(
+              JSON.stringify({
+                error: {
+                  message:
+                    "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+                  type: "invalid_request_error",
+                  param: "max_tokens",
+                  code: "unsupported_parameter",
+                },
+              }),
+              { status: 400, headers: { "Content-Type": "application/json" } },
+            );
+          }
+
+          const stream = sseStreamFromDataPayloads([
+            '{"choices":[{"delta":{"content":"Hey"}}]}',
+            "[DONE]",
+          ]);
+          return new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }
+
+        return new Response("unexpected", { status: 599 });
+      },
+    );
+}
+
 const intelHeaders = {
   Authorization: "Bearer test-token",
   "X-Upstream-Base-Url": "https://api.openai.com/v1",
@@ -111,6 +156,26 @@ describe("gateway e2e (supertest)", () => {
       .set(intelHeaders)
       .send({
         model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "hello" }],
+      })
+      .expect(200);
+
+    expect(res.headers["content-type"]?.includes("text/event-stream")).toBe(
+      true,
+    );
+    expect(res.text).toContain('"kind":"meta"');
+    expect(res.text).toContain("Hey");
+    expect(res.text).toContain("[DONE]");
+  });
+
+  it("POST /v1/intelligent/chat continues when think step fails (upstream 400)", async () => {
+    mockFetchChatSequenceThink400();
+    const app = createApp();
+    const res = await request(app)
+      .post("/v1/intelligent/chat")
+      .set(intelHeaders)
+      .send({
+        model: "gpt-5",
         messages: [{ role: "user", content: "hello" }],
       })
       .expect(200);

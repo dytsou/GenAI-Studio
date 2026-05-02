@@ -482,24 +482,32 @@ export function createApp(): express.Application {
         .join("\n---\n")
         .slice(0, 8000);
 
-      const thinkText = await chatCompletionSingleText({
-        upstreamBase: up.baseUrl,
-        auth: up.auth,
-        model: thinkModel,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a private planning scratchpad. Output at most 5 short bullet points on how to answer the user. No preamble; bullets only.",
-          },
-          {
-            role: "user",
-            content: `User messages (latest last):\n${userDigest || "(empty)"}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 600,
-      });
+      let thinkText = "";
+      try {
+        thinkText = await chatCompletionSingleText({
+          upstreamBase: up.baseUrl,
+          auth: up.auth,
+          model: thinkModel,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a private planning scratchpad. Output at most 5 short bullet points on how to answer the user. No preamble; bullets only.",
+            },
+            {
+              role: "user",
+              content: `User messages (latest last):\n${userDigest || "(empty)"}`,
+            },
+          ],
+          temperature: 0.3,
+          max_tokens: 600,
+        });
+      } catch (e) {
+        // Intelligent mode should still function even if the "think" call fails
+        // (bad upstream key, model mismatch, transient upstream errors, etc.).
+        console.warn("[v1/intelligent/chat] think failed; continuing", e);
+        thinkText = "";
+      }
 
       const framedThink = reveal
         ? thinkText
