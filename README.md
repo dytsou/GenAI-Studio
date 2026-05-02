@@ -113,7 +113,18 @@ pnpm dev
 
 Use this when you want **`POST …/v1/chat`** / **`POST …/v1/intelligent/chat`**, **Postgres-backed memory**, **`POST …/v1/transcribe`**, or **tools**.
 
-1. Run gateway + Postgres with Docker Compose (recommended)
+1. Generate local env files (recommended)
+
+```bash
+pnpm run setup:dev
+```
+
+This writes:
+
+- root **`.env`** (ignored by git): Vite dev-proxy defaults + a generated bearer token
+- **`deploy/.env`** (ignored by git): Compose overrides + the same generated bearer token
+
+2. Run gateway + Postgres with Docker Compose (recommended)
 
 From the **`deploy`** directory:
 
