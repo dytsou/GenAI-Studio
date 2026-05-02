@@ -18,6 +18,7 @@ async function ensureMemorySchema(pool: pg.Pool): Promise<void> {
       embedding DOUBLE PRECISION[],
       tags TEXT[] NOT NULL DEFAULT '{}',
       keyphrases TEXT[] NOT NULL DEFAULT '{}',
+      deleted_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -26,6 +27,9 @@ async function ensureMemorySchema(pool: pg.Pool): Promise<void> {
   );
   await pool.query(
     `ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS keyphrases TEXT[] NOT NULL DEFAULT '{}';`,
+  );
+  await pool.query(
+    `ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS memory_chunks_workspace_idx ON memory_chunks (workspace_id);`,
@@ -125,6 +129,7 @@ export type MemoryChunkDbRow = {
   created_at: string;
   tags: string[] | null;
   keyphrases: string[] | null;
+  deleted_at: string | null;
 };
 
 export type MemoryChunkHit = {
@@ -161,7 +166,7 @@ export async function retrieveTopKChunkHits(params: {
   const { rows } = await params.pool.query<MemoryChunkDbRow>(
     `SELECT id, content, embedding, created_at, tags, keyphrases
      FROM memory_chunks
-     WHERE workspace_id = $1
+     WHERE workspace_id = $1 AND deleted_at IS NULL
      ORDER BY created_at DESC
      LIMIT $2`,
     [params.workspaceId, scanLimit],
@@ -202,7 +207,7 @@ export async function searchChunkHits(params: {
   const limit = Math.min(50, Math.max(1, Math.floor(params.limit)));
   const offset = Math.max(0, Math.floor(params.offset));
 
-  const where: string[] = ["workspace_id = $1"];
+  const where: string[] = ["workspace_id = $1", "deleted_at IS NULL"];
   const args: Array<string | number | string[]> = [params.workspaceId];
 
   if (params.createdFrom) {
@@ -270,7 +275,7 @@ export async function loadChunksByIds(params: {
   }>(
     `SELECT id, content, created_at, tags, keyphrases
      FROM memory_chunks
-     WHERE workspace_id = $1 AND id = ANY($2::uuid[])`,
+     WHERE workspace_id = $1 AND deleted_at IS NULL AND id = ANY($2::uuid[])`,
     [params.workspaceId, ids],
   );
   const byId = new Map(

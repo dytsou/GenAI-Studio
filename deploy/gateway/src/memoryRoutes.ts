@@ -50,6 +50,51 @@ function relevanceBucket(score: number): "high" | "medium" | "low" {
 export function createMemoryRoutes(): express.Router {
   const r = express.Router();
 
+  r.delete("/v1/memory/chunks/:chunk_id", async (req, res) => {
+    const auth = String(req.header("authorization") || "").trim();
+    if (!auth) {
+      return res
+        .status(401)
+        .json({ error: { message: "Authorization header is required." } });
+    }
+
+    const workspaceId = String(req.header("x-workspace-id") || "").trim();
+    if (!workspaceId) {
+      return res
+        .status(400)
+        .json({ error: { message: "X-Workspace-Id header is required." } });
+    }
+
+    const chunkId = String(req.params.chunk_id || "").trim();
+    if (!/^[0-9a-fA-F-]{8,}$/.test(chunkId)) {
+      return res.status(400).json({ error: { message: "Invalid chunk_id." } });
+    }
+
+    const pool = getPgPool();
+    if (!pool) {
+      return res
+        .status(503)
+        .json({ error: { message: "Memory database is not configured." } });
+    }
+
+    try {
+      await pool.query(
+        `UPDATE memory_chunks
+         SET deleted_at = NOW()
+         WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL`,
+        [workspaceId, chunkId],
+      );
+    } catch (e) {
+      console.warn("[memory] delete failed", e);
+      return res
+        .status(503)
+        .json({ error: { message: "Memory database is not configured." } });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(204).end();
+  });
+
   r.get("/v1/memory/recent", async (req, res) => {
     // Intentionally does not call upstream; this is a DB-only read.
     const workspaceId = String(req.header("x-workspace-id") || "").trim();
@@ -81,7 +126,7 @@ export function createMemoryRoutes(): express.Router {
     }>(
       `SELECT id, content, created_at, tags, keyphrases
        FROM memory_chunks
-       WHERE workspace_id = $1
+       WHERE workspace_id = $1 AND deleted_at IS NULL
        ORDER BY created_at DESC
        LIMIT $2`,
       [workspaceId, limit],

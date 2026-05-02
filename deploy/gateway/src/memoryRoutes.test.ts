@@ -5,6 +5,46 @@ import { createApp } from "./app.js";
 import * as memoryService from "./memoryService.js";
 
 describe("memory routes", () => {
+  it("DELETE /v1/memory/chunks/:chunk_id requires Authorization", async () => {
+    const app = createApp();
+    await request(app)
+      .delete("/v1/memory/chunks/00000000-0000-0000-0000-000000000000")
+      .set({ "X-Workspace-Id": "ws" })
+      .expect(401);
+  });
+
+  it("DELETE /v1/memory/chunks/:chunk_id requires X-Workspace-Id", async () => {
+    const app = createApp();
+    await request(app)
+      .delete("/v1/memory/chunks/00000000-0000-0000-0000-000000000000")
+      .set({ Authorization: "Bearer k" })
+      .expect(400);
+  });
+
+  it("DELETE /v1/memory/chunks/:chunk_id returns 503 when DB missing", async () => {
+    const old = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    const app = createApp();
+    await request(app)
+      .delete("/v1/memory/chunks/00000000-0000-0000-0000-000000000000")
+      .set({ Authorization: "Bearer k", "X-Workspace-Id": "ws" })
+      .expect(503);
+    if (old) process.env.DATABASE_URL = old;
+  });
+
+  it("DELETE /v1/memory/chunks/:chunk_id returns 204 (idempotent)", async () => {
+    vi.spyOn(memoryService, "getPgPool").mockReturnValue({
+      query: vi.fn(async () => ({ rowCount: 0, rows: [] })),
+    } as unknown as ReturnType<typeof memoryService.getPgPool>);
+
+    const app = createApp();
+    const res = await request(app)
+      .delete("/v1/memory/chunks/00000000-0000-0000-0000-000000000000")
+      .set({ Authorization: "Bearer k", "X-Workspace-Id": "ws" })
+      .expect(204);
+    expect(res.headers["cache-control"]).toContain("no-store");
+  });
+
   it("GET /v1/memory/recent requires X-Workspace-Id", async () => {
     const app = createApp();
     const res = await request(app).get("/v1/memory/recent").expect(400);
