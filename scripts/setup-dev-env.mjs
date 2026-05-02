@@ -30,6 +30,7 @@ function upsertEnvLine(contents, key, value) {
 
 function main() {
   const token = randomToken("gw_");
+  const litellmMasterKey = randomToken("litellm_");
 
   // Root .env (ignored) — used by Vite dev proxy helper values.
   const rootEnvPath = path.join(repoRoot, ".env");
@@ -52,6 +53,7 @@ function main() {
   deployEnv = upsertEnvLine(deployEnv, "PORT", "8080");
   deployEnv = upsertEnvLine(deployEnv, "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/studio");
   deployEnv = upsertEnvLine(deployEnv, "EMBEDDING_MODEL", "text-embedding-3-small");
+  deployEnv = upsertEnvLine(deployEnv, "LITELLM_MASTER_KEY", litellmMasterKey);
   deployEnv = upsertEnvLine(deployEnv, "MEMORY_CHAT_SAVE_STRATEGY", "facts");
   deployEnv = upsertEnvLine(deployEnv, "ALLOWED_ORIGINS", "http://localhost:5173");
   deployEnv = upsertEnvLine(deployEnv, "ALLOWED_UPSTREAM_ORIGINS", "https://api.openai.com");
@@ -67,6 +69,9 @@ function main() {
       "",
       "Generated token:",
       token,
+      "",
+      "Generated LITELLM_MASTER_KEY:",
+      litellmMasterKey,
       "",
       "Next:",
       "  cd deploy && docker compose up --build",
