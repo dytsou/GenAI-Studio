@@ -17,6 +17,7 @@ It supports streaming chat completions, multi-chat history, attachments (images/
   - Model
   - Temperature / Top P / Max Tokens
   - Global system prompt
+  - Optional **hosted gateway**: enable, set gateway base URL, intelligent mode, memory / tools (see [deploy/README.md](deploy/README.md))
 - Per-message system prompt override in composer.
 - Structured output mode:
   - Build JSON schema fields in UI
@@ -119,8 +120,12 @@ All settings are stored in browser local storage through Zustand persistence.
   - `baseUrl` (default: `https://api.openai.com/v1`)
   - `model` (default: `gpt-4o`)
   - `temperature`, `topP`, `maxTokens`
+  - `contextWindowTokens`, `includeStreamUsage`
   - `systemPrompt`
   - structured output mode + schema fields
+  - **Gateway:** `useHostedGateway`, `gatewayBaseUrl` (default `http://127.0.0.1:8080`), `useIntelligentMode`
+  - **Gateway features:** `memoryEnabled`, `memoryTopK` (1–16), `toolsEnabled`
+  - **Intelligent-mode headers (when intelligent is on):** `intelligentIncludeSessionMemory`, `intelligentIncludeGlobalMemory`, `intelligentRevealMemoryUi`
 
 ### Settings UI (sensitive fields)
 
@@ -130,9 +135,22 @@ All settings are stored in browser local storage through Zustand persistence.
 
 ## API Compatibility
 
+### Direct upstream (default)
+
 The app posts to:
 
 - `{baseUrl}/chat/completions` (or uses `baseUrl` directly if it already ends with `/chat/completions`)
+
+### Hosted gateway (optional)
+
+When **Use hosted gateway** is on in Settings, the SPA posts to:
+
+- `{gatewayBaseUrl}/v1/chat`, or
+- `{gatewayBaseUrl}/v1/intelligent/chat` when **Intelligent mode** is on
+
+Headers include `Authorization` (your API key), `X-Upstream-Base-Url`, `X-Workspace-Id` (stable per browser), `X-Memory-*`, `X-Tools-Enabled`, and when intelligent is on, `X-Studio-Intelligent-*` tier flags. The gateway proxies to your configured upstream. Details: [deploy/README.md](deploy/README.md).
+
+### Request payload (both modes)
 
 Payload includes:
 
@@ -233,6 +251,9 @@ If you see asset 404 errors in production (`index-*.js`, `index-*.css`), it is u
   - Usually caused by extensions (ad/privacy blockers), not app code.
 - **CI TypeScript errors for settings types**
   - Ensure tests and typed fixtures include all required fields (e.g., `systemPrompt`).
+- **Gateway / browser blocks the request (CORS or mixed content)**
+  - The bundled gateway enables CORS with `origin: true` so the requesting origin is echoed (fine for dev and same-site setups). Lock this down in production behind your reverse proxy or by tightening gateway CORS if you expose it publicly — see [deploy/README.md](deploy/README.md).
+  - **HTTPS Pages + HTTP local gateway:** the browser treats that as mixed content (`http://…` blocked from an `https://…` page). Use TLS on the gateway, a tunnel with HTTPS, or run the SPA over HTTP locally when testing against a local gateway.
 
 ## Security Notes
 
