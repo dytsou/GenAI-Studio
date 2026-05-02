@@ -44,27 +44,6 @@
   background: var(--bg-tertiary);
 }
 
-.memory-drawer-tabs {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.memory-tab {
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-}
-
-.memory-tab.active {
-  color: var(--text-primary);
-  border-color: var(--border-focus);
-}
-
 .memory-searchbar {
   display: flex;
   gap: 0.5rem;
@@ -96,6 +75,11 @@
 .memory-search-btn:hover {
   border-color: var(--border-focus);
   color: var(--text-primary);
+}
+
+.memory-search-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .memory-drawer-body {

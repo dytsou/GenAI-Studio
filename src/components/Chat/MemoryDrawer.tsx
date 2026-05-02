@@ -34,7 +34,6 @@ export function MemoryDrawer(props: {
   onOverrideChange: (ov: MemoryOverrideDraft | null) => void;
 }) {
   const { open, onClose, draftText, onOverrideChange } = props;
-  const [tab, setTab] = useState<'candidates' | 'search'>('candidates');
   const [selection, setSelection] = useState<Record<string, MemorySelectionState>>({});
 
   const [candidates, setCandidates] = useState<MemoryChunkRow[]>([]);
@@ -61,7 +60,6 @@ export function MemoryDrawer(props: {
 
   useEffect(() => {
     if (!open) return;
-    if (tab !== 'candidates') return;
     if (!debouncedDraft) {
       setCandidates([]);
       setDraftHash(undefined);
@@ -82,7 +80,7 @@ export function MemoryDrawer(props: {
         setCandidateError(e instanceof Error ? e.message : 'Failed to load candidates');
       })
       .finally(() => setLoadingCandidates(false));
-  }, [open, tab, debouncedDraft]);
+  }, [open, debouncedDraft]);
 
   const runSearch = async () => {
     const q = query.trim();
@@ -104,11 +102,11 @@ export function MemoryDrawer(props: {
     onOverrideChange(null);
   };
 
-  const list = tab === 'candidates' ? candidates : hits;
-  const emptyLabel =
-    tab === 'candidates'
-      ? 'No relevant memory found for this draft yet.'
-      : 'No matches for this query.';
+  const isSearching = query.trim().length > 0;
+  const list = isSearching ? hits : candidates;
+  const emptyLabel = isSearching
+    ? 'No matches for this query.'
+    : 'No relevant memory found for this draft yet.';
 
   if (!open) return null;
 
@@ -124,51 +122,35 @@ export function MemoryDrawer(props: {
             <X size={16} />
           </button>
         </div>
-
-        <div className="memory-drawer-tabs" role="tablist" aria-label="Memory tabs">
+        <div className="memory-searchbar">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search memory… (leave empty to show candidates)"
+            aria-label="Search memory"
+          />
           <button
-            role="tab"
-            aria-selected={tab === 'candidates'}
-            className={`memory-tab ${tab === 'candidates' ? 'active' : ''}`}
-            onClick={() => setTab('candidates')}
+            className="memory-search-btn"
+            onClick={() => void runSearch()}
+            aria-label="Run memory search"
+            disabled={!query.trim()}
+            title={!query.trim() ? 'Type a query to search' : 'Search'}
           >
-            Candidates
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === 'search'}
-            className={`memory-tab ${tab === 'search' ? 'active' : ''}`}
-            onClick={() => setTab('search')}
-          >
-            Search
+            <Search size={16} />
           </button>
         </div>
 
-        {tab === 'search' ? (
-          <div className="memory-searchbar">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search memory…"
-              aria-label="Search memory"
-            />
-            <button className="memory-search-btn" onClick={() => void runSearch()} aria-label="Run memory search">
-              <Search size={16} />
-            </button>
-          </div>
-        ) : null}
-
         <div className="memory-drawer-body">
-          {tab === 'candidates' && loadingCandidates ? (
+          {!isSearching && loadingCandidates ? (
             <div className="memory-drawer-state">Fetching candidates…</div>
           ) : null}
-          {tab === 'candidates' && candidateError ? (
+          {!isSearching && candidateError ? (
             <div className="memory-drawer-state error">{candidateError}</div>
           ) : null}
-          {tab === 'search' && loadingSearch ? (
+          {isSearching && loadingSearch ? (
             <div className="memory-drawer-state">Searching…</div>
           ) : null}
-          {tab === 'search' && searchError ? (
+          {isSearching && searchError ? (
             <div className="memory-drawer-state error">{searchError}</div>
           ) : null}
 
@@ -192,7 +174,9 @@ export function MemoryDrawer(props: {
                     title="Click to cycle: include → exclude → neutral"
                   >
                     <div className="memory-chunk-top">
-                      <span className="memory-chunk-rank">#{c.rank ?? '—'}</span>
+                      <span className="memory-chunk-rank">
+                        {isSearching ? `#${c.rank ?? '—'}` : `Candidate #${c.rank ?? '—'}`}
+                      </span>
                       <span className="memory-chunk-bucket">{c.relevance_bucket ?? ''}</span>
                       <span className="memory-chunk-time">{new Date(c.created_at).toLocaleString()}</span>
                     </div>
