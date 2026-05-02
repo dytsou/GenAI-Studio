@@ -7,6 +7,7 @@ import {
   searchMemory,
   type MemoryChunkRow,
 } from '../../api/memory';
+import { useTranslation } from 'react-i18next';
 import './MemoryDrawer.css';
 
 export type MemorySelectionState = 'neutral' | 'include' | 'exclude';
@@ -39,6 +40,7 @@ export function MemoryDrawer(props: {
   draftText: string;
   onOverrideChange: (ov: MemoryOverrideDraft | null) => void;
 }) {
+  const { t } = useTranslation();
   const { open, onClose, draftText, onOverrideChange } = props;
   const [selection, setSelection] = useState<Record<string, MemorySelectionState>>({});
 
@@ -76,7 +78,7 @@ export function MemoryDrawer(props: {
     void fetchMemoryRecent({ limit: 12 })
       .then((r) => setRecent(r.chunks ?? []))
       .catch((e: unknown) => {
-        setRecentError(e instanceof Error ? e.message : 'Failed to load recent');
+        setRecentError(e instanceof Error ? e.message : t('memoryDrawer.failedToLoadRecent'));
       })
       .finally(() => setLoadingRecent(false));
   }, [open]);
@@ -100,7 +102,7 @@ export function MemoryDrawer(props: {
         setDraftHash(r.draft_hash || undefined);
       })
       .catch((e: unknown) => {
-        setCandidateError(e instanceof Error ? e.message : 'Failed to load candidates');
+        setCandidateError(e instanceof Error ? e.message : t('memoryDrawer.failedToLoadCandidates'));
       })
       .finally(() => setLoadingCandidates(false));
   }, [open, debouncedDraft]);
@@ -114,7 +116,7 @@ export function MemoryDrawer(props: {
       const r = await searchMemory({ request: { query: q, pagination: { limit: 20 } } });
       setHits(r.hits ?? []);
     } catch (e: unknown) {
-      setSearchError(e instanceof Error ? e.message : 'Search failed');
+      setSearchError(e instanceof Error ? e.message : t('memoryDrawer.searchFailed'));
     } finally {
       setLoadingSearch(false);
     }
@@ -126,7 +128,7 @@ export function MemoryDrawer(props: {
     void fetchMemoryRecent({ limit: 12 })
       .then((r) => setRecent(r.chunks ?? []))
       .catch((e: unknown) => {
-        setRecentError(e instanceof Error ? e.message : 'Failed to load recent');
+        setRecentError(e instanceof Error ? e.message : t('memoryDrawer.failedToLoadRecent'));
       })
       .finally(() => setLoadingRecent(false));
   };
@@ -144,7 +146,7 @@ export function MemoryDrawer(props: {
         setDraftHash(r.draft_hash || undefined);
       })
       .catch((e: unknown) => {
-        setCandidateError(e instanceof Error ? e.message : 'Failed to load candidates');
+        setCandidateError(e instanceof Error ? e.message : t('memoryDrawer.failedToLoadCandidates'));
       })
       .finally(() => setLoadingCandidates(false));
   };
@@ -153,7 +155,7 @@ export function MemoryDrawer(props: {
     chunkId: string,
     origin: 'recent' | 'candidates' | 'search',
   ) => {
-    const ok = window.confirm('Delete this memory chunk?');
+    const ok = window.confirm(t('memoryDrawer.deleteConfirm'));
     if (!ok) return;
 
     // Optimistic remove + selection cleanup.
@@ -174,7 +176,7 @@ export function MemoryDrawer(props: {
     try {
       await deleteMemoryChunk({ chunkId });
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Delete failed';
+      const msg = e instanceof Error ? e.message : t('memoryDrawer.delete');
       if (origin === 'recent') setRecentError(msg);
       else if (origin === 'candidates') setCandidateError(msg);
       else setSearchError(msg);
@@ -194,8 +196,8 @@ export function MemoryDrawer(props: {
   const isSearching = query.trim().length > 0;
   const list = isSearching ? hits : candidates;
   const emptyLabel = isSearching
-    ? 'No matches for this query.'
-    : 'No relevant memory found for this draft yet.';
+    ? t('memoryDrawer.noMatches')
+    : t('memoryDrawer.noRelevantMemory');
 
   const renderKeyphrases = (c: MemoryChunkRow) => {
     const phrases = Array.isArray(c.keyphrases) ? c.keyphrases.filter(Boolean) : [];
@@ -210,14 +212,14 @@ export function MemoryDrawer(props: {
   if (!open) return null;
 
   return (
-    <div className="memory-drawer-overlay" role="dialog" aria-modal="true" aria-label="Memory selection">
+    <div className="memory-drawer-overlay" role="dialog" aria-modal="true" aria-label={t('memoryDrawer.dialogLabel')}>
       <div className="memory-drawer">
         <div className="memory-drawer-header">
           <div className="memory-drawer-title">
             <Sparkles size={16} />
-            <span>Memory</span>
+            <span>{t('memoryDrawer.title')}</span>
           </div>
-          <button className="memory-drawer-close" onClick={onClose} aria-label="Close memory drawer">
+          <button className="memory-drawer-close" onClick={onClose} aria-label={t('memoryDrawer.close')}>
             <X size={16} />
           </button>
         </div>
@@ -225,15 +227,15 @@ export function MemoryDrawer(props: {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search memory… (leave empty to show candidates)"
-            aria-label="Search memory"
+            placeholder={t('memoryDrawer.searchPlaceholder')}
+            aria-label={t('memoryDrawer.searchAriaLabel')}
           />
           <button
             className="memory-search-btn"
             onClick={() => void runSearch()}
-            aria-label="Run memory search"
+            aria-label={t('memoryDrawer.runSearch')}
             disabled={!query.trim()}
-            title={!query.trim() ? 'Type a query to search' : 'Search'}
+            title={!query.trim() ? t('memoryDrawer.typeQueryToSearch') : t('memoryDrawer.search')}
           >
             <Search size={16} />
           </button>
@@ -243,7 +245,7 @@ export function MemoryDrawer(props: {
           {!isSearching ? (
             <div className="memory-recent">
               <div className="memory-recent-header">
-                <span>Recently saved</span>
+                <span>{t('memoryDrawer.recentlySaved')}</span>
                 <button
                   type="button"
                   className="memory-recent-refresh"
@@ -252,15 +254,15 @@ export function MemoryDrawer(props: {
                   }}
                   disabled={loadingRecent}
                 >
-                  Refresh
+                  {t('memoryDrawer.refresh')}
                 </button>
               </div>
               {loadingRecent ? (
-                <div className="memory-drawer-state">Loading recent…</div>
+                <div className="memory-drawer-state">{t('memoryDrawer.loadingRecent')}</div>
               ) : recentError ? (
                 <div className="memory-drawer-state error">{recentError}</div>
               ) : recent.length === 0 ? (
-                <div className="memory-drawer-state">No saved memory yet.</div>
+                <div className="memory-drawer-state">{t('memoryDrawer.noSavedMemoryYet')}</div>
               ) : (
                 <div className="memory-recent-list">
                   {recent.slice(0, 6).map((c) => (
@@ -270,8 +272,8 @@ export function MemoryDrawer(props: {
                         type="button"
                         className="memory-row-delete"
                         onClick={() => void handleDelete(c.chunk_id, 'recent')}
-                        aria-label="Delete memory chunk"
-                        title="Delete"
+                        aria-label={t('memoryDrawer.deleteChunk')}
+                        title={t('memoryDrawer.delete')}
                         disabled={!!deleting[c.chunk_id]}
                       >
                         <Trash2 size={14} />
@@ -288,13 +290,13 @@ export function MemoryDrawer(props: {
           ) : null}
 
           {!isSearching && loadingCandidates ? (
-            <div className="memory-drawer-state">Fetching candidates…</div>
+            <div className="memory-drawer-state">{t('memoryDrawer.fetchingCandidates')}</div>
           ) : null}
           {!isSearching && candidateError ? (
             <div className="memory-drawer-state error">{candidateError}</div>
           ) : null}
           {isSearching && loadingSearch ? (
-            <div className="memory-drawer-state">Searching…</div>
+            <div className="memory-drawer-state">{t('memoryDrawer.searching')}</div>
           ) : null}
           {isSearching && searchError ? (
             <div className="memory-drawer-state error">{searchError}</div>
@@ -318,12 +320,14 @@ export function MemoryDrawer(props: {
                         }))
                       }
                       aria-label={`Memory chunk ${c.rank ?? ''} ${st}`}
-                      title="Click to cycle: include → exclude → neutral"
+                      title={t('memoryDrawer.cycleHint')}
                       disabled={!!deleting[c.chunk_id]}
                     >
                       <div className="memory-chunk-top">
                         <span className="memory-chunk-rank">
-                          {isSearching ? `#${c.rank ?? '—'}` : `Candidate #${c.rank ?? '—'}`}
+                          {isSearching
+                            ? t('memoryDrawer.searchRank', { rank: c.rank ?? '—' })
+                            : t('memoryDrawer.candidateRank', { rank: c.rank ?? '—' })}
                         </span>
                         <span className="memory-chunk-bucket">{c.relevance_bucket ?? ''}</span>
                         <span className="memory-chunk-time">{new Date(c.created_at).toLocaleString()}</span>
@@ -346,8 +350,8 @@ export function MemoryDrawer(props: {
                           isSearching ? 'search' : 'candidates',
                         )
                       }
-                      aria-label="Delete memory chunk"
-                      title="Delete"
+                      aria-label={t('memoryDrawer.deleteChunk')}
+                      title={t('memoryDrawer.delete')}
                       disabled={!!deleting[c.chunk_id]}
                     >
                       <Trash2 size={14} />
@@ -362,14 +366,14 @@ export function MemoryDrawer(props: {
         <div className="memory-drawer-footer">
           <div className="memory-selection-summary">
             <span>
-              Include: <strong>{override.includeChunkIds.length}</strong>
+              {t('memoryDrawer.include')}: <strong>{override.includeChunkIds.length}</strong>
             </span>
             <span>
-              Exclude: <strong>{override.excludeChunkIds.length}</strong>
+              {t('memoryDrawer.exclude')}: <strong>{override.excludeChunkIds.length}</strong>
             </span>
           </div>
           <button className="memory-clear-btn" onClick={clearSelection} disabled={!Object.keys(selection).length}>
-            Clear
+            {t('memoryDrawer.clear')}
           </button>
         </div>
       </div>

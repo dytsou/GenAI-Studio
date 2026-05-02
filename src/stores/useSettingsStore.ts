@@ -1,15 +1,17 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { SupportedLanguage } from "../i18n/i18n";
 
 export interface SchemaField {
   id: string;
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  type: "string" | "number" | "boolean" | "array" | "object";
   required: boolean;
   description: string;
 }
 
 interface SettingsState {
+  language: SupportedLanguage;
   apiKey: string;
   baseUrl: string;
   model: string;
@@ -47,31 +49,35 @@ interface SettingsState {
   setSchemaFields: (fields: SchemaField[]) => void;
 }
 
-export const useSettingsStore = create<SettingsState>()(
-  persist(
+export const useSettingsStore = create<
+  SettingsState,
+  [["zustand/persist", SettingsState]]
+>()(
+  persist<SettingsState>(
     (set) => ({
-      apiKey: '',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
+      language: "en",
+      apiKey: "",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o",
       temperature: 0.7,
       topP: 1.0,
       maxTokens: 4096,
       contextWindowTokens: 128000,
       includeStreamUsage: true,
-      systemPrompt: '',
+      systemPrompt: "",
       structuredOutputMode: false,
       schemaFields: [
         {
-          id: '1',
-          name: 'summary',
-          type: 'string',
+          id: "1",
+          name: "summary",
+          type: "string",
           required: true,
-          description: 'A short summary',
+          description: "A short summary",
         },
       ],
 
       useHostedGateway: false,
-      gatewayBaseUrl: 'http://127.0.0.1:8080',
+      gatewayBaseUrl: "http://127.0.0.1:8080",
       useIntelligentMode: false,
       memoryEnabled: true,
       memoryTopK: 8,
@@ -84,7 +90,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSchemaFields: (fields) => set(() => ({ schemaFields: fields })),
     }),
     {
-      name: 'chatgpt-settings-storage',
+      name: "chatgpt-settings-storage",
     },
   ),
 );

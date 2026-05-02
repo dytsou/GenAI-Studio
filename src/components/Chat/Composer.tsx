@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../stores/useSettingsStore';
 import { transcribeAudio } from '../../api/transcribe';
 import type { MemoryOverrideDraft } from './MemoryDrawer';
 import { MemoryDrawer } from './MemoryDrawer';
+import { t } from '../../i18n/i18n';
 import './Composer.css';
 
 interface ComposerProps {
@@ -127,7 +128,7 @@ export function Composer({
       setIsRecording(true);
     } catch (e) {
       console.error(e);
-      alert('Microphone access failed.');
+        alert(t('composer.voiceMicFailed'));
     }
   };
 
@@ -163,8 +164,8 @@ export function Composer({
           className={`composer-system-toggle-btn ${isSystemOverrideEnabled ? 'active' : ''}`}
           onClick={() => setIsSystemOverrideEnabled(prev => !prev)}
           disabled={isProcessingFile}
-          title="Toggle per-message system override"
-          aria-label="Toggle per-message system override"
+          title={t('composer.toggleSystemOverride')}
+          aria-label={t('composer.toggleSystemOverride')}
         >
           <Sparkles size={14} />
         </button>
@@ -174,8 +175,8 @@ export function Composer({
             className={`composer-system-toggle-btn ${memoryDrawerOpen ? 'active' : ''}`}
             onClick={() => setMemoryDrawerOpen(true)}
             disabled={isProcessingFile}
-            title="Select memory for this send"
-            aria-label="Select memory for this send"
+            title={t('composer.selectMemoryForSend')}
+            aria-label={t('composer.selectMemoryForSend')}
           >
             <BookOpen size={14} />
           </button>
@@ -186,8 +187,8 @@ export function Composer({
             className={`composer-mic-btn ${isRecording ? 'active' : ''}`}
             onClick={() => (isRecording ? void finishRecordingAndTranscribe() : void startRecording())}
             disabled={isGenerating || isTranscribing || isProcessingFile}
-            title={isRecording ? 'Stop and transcribe' : 'Record voice (gateway)'}
-            aria-label="Voice transcription"
+            title={isRecording ? t('composer.stopAndTranscribe') : t('composer.recordVoice')}
+            aria-label={t('composer.voiceTranscription')}
           >
             <Mic size={14} />
           </button>
@@ -254,7 +255,7 @@ export function Composer({
             className="attach-btn" 
             onClick={() => fileInputRef.current?.click()}
             disabled={isProcessingFile}
-            title="Attach Image or PDF"
+            title={t('composer.attach')}
           >
             <Paperclip size={20} />
           </button>
@@ -273,7 +274,7 @@ export function Composer({
             value={content}
             onChange={e => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything..."
+            placeholder={t('composer.placeholder')}
             rows={1}
             disabled={isProcessingFile}
           />
@@ -284,7 +285,7 @@ export function Composer({
                 type="button"
                 className="stop-btn"
                 onClick={onStop}
-                title="Stop generation and clear queued messages"
+                title={t('composer.stop')}
               >
                 <Square size={20} fill="currentColor" />
               </button>
@@ -296,8 +297,8 @@ export function Composer({
               disabled={(!content.trim() && attachments.length === 0) || isProcessingFile}
               title={
                 isGenerating
-                  ? 'Add message to queue (sent after this reply finishes)'
-                  : 'Send'
+                  ? t('composer.queueHint')
+                  : t('composer.send')
               }
             >
               <Send size={20} />
@@ -306,7 +307,7 @@ export function Composer({
         </div>
         {(isProcessingFile || isTranscribing) && (
           <div className="processing-indicator">
-            {isTranscribing ? 'Transcribing…' : 'Processing attachments...'}
+            {isTranscribing ? t('composer.transcribing') : t('composer.processingAttachments')}
           </div>
         )}
       </div>

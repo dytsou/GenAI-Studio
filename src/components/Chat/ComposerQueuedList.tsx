@@ -3,6 +3,7 @@ import { X, Paperclip, ChevronRight } from 'lucide-react';
 import type { Attachment } from '../../stores/useChatStore';
 import type { QueuedSend } from './queuedSendTypes';
 import { processFile } from '../../utils/attachmentManager';
+import { useTranslation } from 'react-i18next';
 import './ComposerQueuedList.css';
 
 type ComposerQueuedListProps = {
@@ -21,6 +22,7 @@ export function ComposerQueuedList({
   onRemove,
   onAppendAttachments,
 }: ComposerQueuedListProps) {
+  const { t } = useTranslation();
   const queueFileInputRef = useRef<HTMLInputElement>(null);
   const attachForIdRef = useRef<string | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
@@ -73,7 +75,7 @@ export function ComposerQueuedList({
   const panelId = 'composer-queued-panel';
 
   return (
-    <div className="composer-queued-toggle" aria-label="Queued messages">
+    <div className="composer-queued-toggle" aria-label={t('queue.panelLabel')}>
       <input
         type="file"
         ref={queueFileInputRef}
@@ -96,7 +98,7 @@ export function ComposerQueuedList({
           aria-hidden
         />
         <span className="composer-queued-toggle-title">
-          Queued messages
+          {t('queue.title')}
           <span className="composer-queued-toggle-count">({items.length})</span>
         </span>
       </button>
@@ -107,11 +109,11 @@ export function ComposerQueuedList({
               {i > 0 ? ' · ' : ''}
               {previewText(it.content, 48) ||
                 (it.attachments.length > 0
-                  ? `${it.attachments.length} attachment${it.attachments.length === 1 ? '' : 's'}`
+                  ? t('queue.attachmentsCount', { count: it.attachments.length })
                   : '…')}
             </span>
           ))}
-          {items.length > 2 ? ` · +${items.length - 2} more` : ''}
+          {items.length > 2 ? ` · ${t('queue.more', { count: items.length - 2 })}` : ''}
         </p>
       )}
       <div
@@ -125,14 +127,14 @@ export function ComposerQueuedList({
         <div key={item.id} className="composer-queued-item">
           <div className="composer-queued-item-header">
             <span className="composer-queued-item-label">
-              Queued {index + 1}/{items.length}
+              {t('queue.queuedItem', { index: index + 1, total: items.length })}
             </span>
             <button
               type="button"
               className="composer-queued-item-remove"
               onClick={() => onRemove(item.id)}
-              title="Remove from queue"
-              aria-label={`Remove queued message ${index + 1}`}
+              title={t('queue.removeFromQueue')}
+              aria-label={t('queue.removeQueuedAria', { index: index + 1 })}
             >
               <X size={16} />
             </button>
@@ -141,7 +143,7 @@ export function ComposerQueuedList({
             className="composer-queued-textarea"
             value={item.content}
             onChange={(e) => onUpdate(item.id, { content: e.target.value })}
-            placeholder="Message text…"
+            placeholder={t('queue.messagePlaceholder')}
             rows={2}
             disabled={isProcessingFile}
           />
@@ -158,7 +160,7 @@ export function ComposerQueuedList({
                         attachments: item.attachments.filter((_, i) => i !== idx),
                       })
                     }
-                    title="Remove attachment"
+                    title={t('queue.removeAttachment')}
                   >
                     <X size={14} />
                   </button>
@@ -172,7 +174,7 @@ export function ComposerQueuedList({
               className="attach-btn composer-queued-attach"
               onClick={() => openAttachFor(item.id)}
               disabled={isProcessingFile}
-              title="Attach to this queued message"
+              title={t('queue.attachQueued')}
             >
               <Paperclip size={18} />
             </button>
@@ -184,14 +186,14 @@ export function ComposerQueuedList({
                 const v = e.target.value;
                 onUpdate(item.id, { promptOverride: v ? v : undefined });
               }}
-              placeholder="Optional system override (this message only)"
+              placeholder={t('queue.overridePlaceholder')}
               disabled={isProcessingFile}
             />
           </div>
         </div>
       ))}
       {isProcessingFile && (
-        <div className="processing-indicator">Processing attachments for queue…</div>
+        <div className="processing-indicator">{t('queue.processingQueue')}</div>
       )}
       </div>
     </div>

@@ -2,11 +2,13 @@ import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { X, Save, AlertCircle, Eye } from 'lucide-react';
 import { useSettingsStore } from '../../stores/useSettingsStore';
 import { mergeMaskedSettings, type MaskedSettingsDraft } from '../../utils/settingsMasking';
+import { useTranslation } from 'react-i18next';
 import './SettingsModal.css';
 
 function draftFromSettings(): MaskedSettingsDraft {
   const s = useSettingsStore.getState();
   return {
+    language: s.language,
     apiKey: s.apiKey,
     baseUrl: s.baseUrl,
     model: s.model,
@@ -29,6 +31,7 @@ function draftFromSettings(): MaskedSettingsDraft {
 }
 
 export function SettingsModal() {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [pressReveal, setPressReveal] = useState<'baseUrl' | 'apiKey' | null>(null);
   const settings = useSettingsStore();
@@ -85,6 +88,7 @@ export function SettingsModal() {
     const s = useSettingsStore.getState();
     const result = mergeMaskedSettings({
       stored: {
+        language: s.language,
         apiKey: s.apiKey,
         baseUrl: s.baseUrl,
         model: s.model,
@@ -134,7 +138,7 @@ export function SettingsModal() {
     <div className="modal-overlay">
       <div className="modal-content settings-modal">
         <div className="modal-header">
-          <h2>Application Settings</h2>
+          <h2>{t('settings.title')}</h2>
           {settings.apiKey && (
             <button
               className="close-btn"
@@ -142,7 +146,7 @@ export function SettingsModal() {
                 setPressReveal(null);
                 setIsOpen(false);
               }}
-              aria-label="Close Settings"
+              aria-label={t('settings.close')}
             >
               <X size={20} />
             </button>
@@ -152,15 +156,36 @@ export function SettingsModal() {
         {!settings.apiKey && (
           <div className="api-warning">
             <AlertCircle size={20} />
-            <span>Please configure your API Key to start using the app.</span>
+            <span>{t('settings.apiWarning')}</span>
           </div>
         )}
 
         <form onSubmit={handleSave} className="settings-form">
           <fieldset className="settings-fieldset">
-            <legend>Upstream (OpenAI-compatible)</legend>
+            <legend>{t('settings.languageLegend')}</legend>
             <div className="form-group">
-              <label htmlFor="baseUrl">API Base URL</label>
+              <label htmlFor="language">{t('settings.languageLabel')}</label>
+              <select
+                id="language"
+                name="language"
+                value={localSettings.language}
+                onChange={(e) =>
+                  setLocalSettings((prev) => ({
+                    ...prev,
+                    language: e.target.value === 'zh-TW' ? 'zh-TW' : 'en',
+                  }))
+                }
+              >
+                <option value="en">English</option>
+                <option value="zh-TW">繁體中文</option>
+              </select>
+            </div>
+          </fieldset>
+
+          <fieldset className="settings-fieldset">
+            <legend>{t('settings.upstreamLegend')}</legend>
+            <div className="form-group">
+              <label htmlFor="baseUrl">{t('settings.apiBaseUrl')}</label>
               <div className="secret-input-row">
                 <input
                   type={pressReveal === 'baseUrl' ? 'text' : 'password'}
@@ -168,7 +193,7 @@ export function SettingsModal() {
                   name="baseUrl"
                   value={localSettings.baseUrl}
                   onChange={handleChange}
-                  placeholder={settings.baseUrl || 'https://api.openai.com/v1'}
+                  placeholder={settings.baseUrl || t('settings.defaultBaseUrl')}
                   autoComplete="off"
                   onCopy={preventCopyUnlessRevealed('baseUrl')}
                   onCut={preventCopyUnlessRevealed('baseUrl')}
@@ -176,8 +201,8 @@ export function SettingsModal() {
                 <button
                   type="button"
                   className="secret-reveal-btn"
-                  aria-label="Hold to reveal API base URL"
-                  title="Hold to show"
+                  aria-label={t('settings.holdToRevealBaseUrl')}
+                  title={t('settings.holdToShow')}
                   onPointerDown={(e) => {
                     e.preventDefault();
                     setPressReveal('baseUrl');
@@ -195,7 +220,7 @@ export function SettingsModal() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="apiKey">API Key (Stored locally)</label>
+              <label htmlFor="apiKey">{t('settings.apiKey')}</label>
               <div className="secret-input-row">
                 <input
                   type={pressReveal === 'apiKey' ? 'text' : 'password'}
@@ -203,7 +228,9 @@ export function SettingsModal() {
                   name="apiKey"
                   value={localSettings.apiKey}
                   onChange={handleChange}
-                  placeholder={settings.apiKey ? 'Leave empty to keep existing key' : 'sk-...'}
+                  placeholder={
+                    settings.apiKey ? t('settings.keepExistingApiKey') : t('settings.apiKeyPlaceholder')
+                  }
                   autoComplete="off"
                   onCopy={preventCopyUnlessRevealed('apiKey')}
                   onCut={preventCopyUnlessRevealed('apiKey')}
@@ -211,8 +238,8 @@ export function SettingsModal() {
                 <button
                   type="button"
                   className="secret-reveal-btn"
-                  aria-label="Hold to reveal API key"
-                  title="Hold to show"
+                  aria-label={t('settings.holdToRevealApiKey')}
+                  title={t('settings.holdToShow')}
                   onPointerDown={(e) => {
                     e.preventDefault();
                     setPressReveal('apiKey');
@@ -231,7 +258,7 @@ export function SettingsModal() {
           </fieldset>
 
           <fieldset className="settings-fieldset">
-            <legend>Hosted gateway</legend>
+            <legend>{t('settings.gatewayLegend')}</legend>
             <div className="form-group form-checkbox-row">
               <label htmlFor="useHostedGateway" className="checkbox-label">
                 <input
@@ -246,18 +273,18 @@ export function SettingsModal() {
                     }))
                   }
                 />
-                Use hosted gateway (Docker / Express)
+                {t('settings.useHostedGateway')}
               </label>
             </div>
             <div className="form-group">
-              <label htmlFor="gatewayBaseUrl">Gateway base URL</label>
+              <label htmlFor="gatewayBaseUrl">{t('settings.gatewayBaseUrl')}</label>
               <input
                 type="text"
                 id="gatewayBaseUrl"
                 name="gatewayBaseUrl"
                 value={localSettings.gatewayBaseUrl}
                 onChange={handleChange}
-                placeholder="http://127.0.0.1:8080"
+                placeholder={t('settings.defaultGatewayUrl')}
                 disabled={!gatewayOn}
               />
             </div>
@@ -272,7 +299,7 @@ export function SettingsModal() {
                     setLocalSettings((prev) => ({ ...prev, useIntelligentMode: e.target.checked }))
                   }
                 />
-                Intelligent mode (think → answer, <code>/v1/intelligent/chat</code>)
+                {t('settings.intelligentMode', { path: '/v1/intelligent/chat' })}
               </label>
             </div>
             <div className={`form-group form-checkbox-row ${!gatewayOn ? 'disabled' : ''}`}>
@@ -286,11 +313,11 @@ export function SettingsModal() {
                     setLocalSettings((prev) => ({ ...prev, memoryEnabled: e.target.checked }))
                   }
                 />
-                Long-term memory retrieve + save
+                {t('settings.memoryEnabled')}
               </label>
             </div>
             <div className={`form-group ${!gatewayOn ? 'disabled' : ''}`}>
-              <label htmlFor="memoryTopK">Memory chunks to retrieve (1–16)</label>
+              <label htmlFor="memoryTopK">{t('settings.memoryTopK')}</label>
               <input
                 type="number"
                 id="memoryTopK"
@@ -313,12 +340,12 @@ export function SettingsModal() {
                     setLocalSettings((prev) => ({ ...prev, toolsEnabled: e.target.checked }))
                   }
                 />
-                Agent tool loop + MCP tools (when configured on gateway)
+                {t('settings.toolsEnabled')}
               </label>
             </div>
 
             <fieldset className={`settings-subfieldset ${!gatewayOn || !localSettings.useIntelligentMode ? 'disabled' : ''}`}>
-              <legend>Intelligent memory (per send defaults)</legend>
+              <legend>{t('settings.intelligentMemoryLegend')}</legend>
               <div className="form-group form-checkbox-row">
                 <label className="checkbox-label">
                   <input
@@ -332,7 +359,7 @@ export function SettingsModal() {
                       }))
                     }
                   />
-                  Include session-tier memory
+                  {t('settings.includeSessionMemory')}
                 </label>
               </div>
               <div className="form-group form-checkbox-row">
@@ -348,7 +375,7 @@ export function SettingsModal() {
                       }))
                     }
                   />
-                  Include global-tier memory
+                  {t('settings.includeGlobalMemory')}
                 </label>
               </div>
               <div className="form-group form-checkbox-row">
@@ -364,14 +391,14 @@ export function SettingsModal() {
                       }))
                     }
                   />
-                  Reveal memory values in gateway prompt (less masking)
+                  {t('settings.revealValues')}
                 </label>
               </div>
             </fieldset>
           </fieldset>
 
           <div className="form-group">
-            <label htmlFor="model">Model Name</label>
+            <label htmlFor="model">{t('settings.modelName')}</label>
             <input
               type="text"
               id="model"
@@ -386,7 +413,7 @@ export function SettingsModal() {
 
           <div className="form-split">
             <div className="form-group">
-              <label htmlFor="temperature">Temperature ({localSettings.temperature.toFixed(1)})</label>
+              <label htmlFor="temperature">{t('settings.temperature')} ({localSettings.temperature.toFixed(1)})</label>
               <input
                 type="range"
                 id="temperature"
@@ -400,7 +427,7 @@ export function SettingsModal() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="topP">Top P ({localSettings.topP.toFixed(1)})</label>
+              <label htmlFor="topP">{t('settings.topP')} ({localSettings.topP.toFixed(1)})</label>
               <input
                 type="range"
                 id="topP"
@@ -415,7 +442,7 @@ export function SettingsModal() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="maxTokens">Max Tokens (output limit)</label>
+            <label htmlFor="maxTokens">{t('settings.maxTokens')}</label>
             <input
               type="number"
               id="maxTokens"
@@ -429,7 +456,7 @@ export function SettingsModal() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="contextWindowTokens">Context window (tokens, for stats)</label>
+            <label htmlFor="contextWindowTokens">{t('settings.contextWindow')}</label>
             <input
               type="number"
               id="contextWindowTokens"
@@ -454,18 +481,18 @@ export function SettingsModal() {
                   setLocalSettings((prev) => ({ ...prev, includeStreamUsage: e.target.checked }))
                 }
               />
-              Include usage in stream (OpenAI-compatible; disable if your API rejects it)
+              {t('settings.includeUsage')}
             </label>
           </div>
 
           <div className="form-group">
-            <label htmlFor="systemPrompt">System Prompt</label>
+            <label htmlFor="systemPrompt">{t('settings.systemPrompt')}</label>
             <textarea
               id="systemPrompt"
               name="systemPrompt"
               value={localSettings.systemPrompt}
               onChange={handleChange}
-              placeholder="Optional instructions for assistant behavior..."
+              placeholder={t('settings.systemPromptPlaceholder')}
               rows={4}
             />
           </div>
@@ -473,7 +500,7 @@ export function SettingsModal() {
           <div className="modal-footer">
             <button type="submit" className="save-btn">
               <Save size={18} />
-              Save Configuration
+              {t('settings.save')}
             </button>
           </div>
         </form>

@@ -4,9 +4,11 @@ import type { SchemaField } from '../../stores/useSettingsStore';
 import { useChatStore } from '../../stores/useChatStore';
 import { Plus, Trash2, Download, Table2, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { useTranslation } from 'react-i18next';
 import './SchemaWorkspace.css';
 
 export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   const { schemaFields, setSchemaFields } = useSettingsStore();
   const { chats, activeChatId } = useChatStore();
 
@@ -134,17 +136,17 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
   return (
     <div className="schema-workspace">
       <div className="schema-header">
-        <h3 className="schema-title">Schema Builder</h3>
+        <h3 className="schema-title">{t('schema.title')}</h3>
         <button
           className="schema-close-btn"
           onClick={onClose}
-          aria-label="Close structured output"
+          aria-label={t('schema.close')}
           type="button"
         >
           <X size={16} />
         </button>
         <button className="add-field-btn" onClick={handleAddField}>
-          <Plus size={16} /> Add Field
+          <Plus size={16} /> {t('schema.addField')}
         </button>
       </div>
 
@@ -152,10 +154,10 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
         <table className="schema-table">
           <thead>
             <tr>
-              <th>Property</th>
-              <th>Type</th>
-              <th>Req</th>
-              <th>Desc</th>
+              <th>{t('schema.property')}</th>
+              <th>{t('schema.type')}</th>
+              <th>{t('schema.req')}</th>
+              <th>{t('schema.desc')}</th>
               <th></th>
             </tr>
           </thead>
@@ -216,30 +218,35 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
               <div className="schema-mobile-sub">
                 <span className="schema-pill">{field.type}</span>
                 <span className="schema-pill">
-                  {field.required ? 'Required' : 'Optional'}
+                  {field.required ? t('schema.required') : t('schema.optional')}
                 </span>
               </div>
             </div>
             <button type="button" className="schema-edit-btn" onClick={() => openEdit(field)}>
-              Edit
+              {t('schema.edit')}
             </button>
           </div>
         ))}
       </div>
 
       <div className="schema-preview">
-        <h4>JSON Preview</h4>
+        <h4>{t('schema.jsonPreview')}</h4>
         <pre>{JSON.stringify(generatedSchema.json_schema.schema, null, 2)}</pre>
       </div>
 
       <div className="schema-exports">
-        <h4>Outputs</h4>
-        {hasFormattingError && <div className="validation-error">Last response is not valid JSON.</div>}
+        <h4>{t('schema.outputs')}</h4>
+        {hasFormattingError && <div className="validation-error">{t('schema.invalidJson')}</div>}
         <div className="export-buttons">
           <button className="export-btn" disabled={!parsedJson} onClick={exportJson}>
             <Download size={14} /> JSON
           </button>
-          <button className="export-btn" disabled={!isArrayResponse} onClick={exportCsv} title={!isArrayResponse ? 'Only available when array' : ''}>
+          <button
+            className="export-btn"
+            disabled={!isArrayResponse}
+            onClick={exportCsv}
+            title={!isArrayResponse ? t('schema.onlyArrayCsv') : ''}
+          >
             <Table2 size={14} /> CSV
           </button>
         </div>
@@ -254,11 +261,11 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
         >
           <div className="schema-edit-popout" onClick={(e) => e.stopPropagation()}>
             <div className="schema-edit-header">
-              <h4>Edit Property</h4>
+              <h4>{t('schema.editProperty')}</h4>
               <button
                 className="schema-edit-close"
                 onClick={closeEdit}
-                aria-label="Close edit"
+                aria-label={t('schema.closeEdit')}
                 type="button"
               >
                 <X size={16} />
@@ -273,7 +280,7 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
               className="schema-edit-form"
             >
               <label className="schema-edit-label">
-                Property
+                {t('schema.property')}
                 <input
                   type="text"
                   value={editDraft.name}
@@ -282,7 +289,7 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
               </label>
 
               <label className="schema-edit-label">
-                Type
+                {t('schema.type')}
                 <select
                   value={editDraft.type}
                   onChange={(e) =>
@@ -305,11 +312,11 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
                   checked={editDraft.required}
                   onChange={(e) => setEditDraft((prev) => (prev ? { ...prev, required: e.target.checked } : prev))}
                 />
-                Required
+                {t('schema.required')}
               </label>
 
               <label className="schema-edit-label">
-                Description
+                {t('schema.description')}
                 <input
                   type="text"
                   value={editDraft.description}
@@ -330,15 +337,15 @@ export function SchemaWorkspace({ onClose }: { onClose: () => void }) {
                     closeEdit();
                   }}
                 >
-                  <Trash2 size={14} /> Delete
+                  <Trash2 size={14} /> {t('schema.delete')}
                 </button>
 
                 <div className="schema-edit-actions-right">
                   <button type="button" className="schema-cancel-edit-btn" onClick={closeEdit}>
-                    Cancel
+                    {t('schema.cancel')}
                   </button>
                   <button type="submit" className="schema-save-edit-btn">
-                    Save
+                    {t('schema.save')}
                   </button>
                 </div>
               </div>

@@ -2,6 +2,8 @@
  * Override broken / partial jsdom-localStorage bindings (some Node setups inject
  * `--localstorage-file` stubs without Storage methods).
  */
+import "@testing-library/jest-dom/vitest";
+
 function makeStorage(): Storage {
   const memory = new Map<string, string>();
   return {

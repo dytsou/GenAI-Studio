@@ -1,4 +1,5 @@
 import './StreamStatsBar.css';
+import { useTranslation } from 'react-i18next';
 
 export type StreamStatsBarProps = {
   promptTokens: number;
@@ -34,6 +35,7 @@ export function StreamStatsBar({
   studioChosenModel,
   studioMemoryTokensUsed,
 }: StreamStatsBarProps) {
+  const { t } = useTranslation();
   const tpsLabel =
     tokensPerSecond != null && Number.isFinite(tokensPerSecond) ? `${tokensPerSecond.toFixed(1)} t/s` : '—';
 
@@ -45,17 +47,17 @@ export function StreamStatsBar({
     <div
       className={`stream-stats-bar ${active ? 'stream-stats-bar--active' : ''}`}
       aria-live="polite"
-      aria-label="Streaming token statistics"
+      aria-label={t('streamStats.ariaLabel')}
     >
       <span className="stream-stats-item">
-        <span className="stream-stats-label">Context:</span>{' '}
+        <span className="stream-stats-label">{t('streamStats.context')}</span>{' '}
         <span className="stream-stats-value">
           {Math.round(promptTokens)}/{contextWindowTokens} ({formatPercent(promptTokens, contextWindowTokens)})
         </span>
       </span>
       <span className="stream-stats-sep" aria-hidden />
       <span className="stream-stats-item">
-        <span className="stream-stats-label">Output:</span>{' '}
+        <span className="stream-stats-label">{t('streamStats.output')}</span>{' '}
         <span className="stream-stats-value">
           {Math.round(completionTokens)}/{formatOutputCap(maxOutputTokens)}
         </span>
@@ -68,14 +70,14 @@ export function StreamStatsBar({
         <>
           <span className="stream-stats-sep" aria-hidden />
           {studioChosenModel ? (
-            <span className="stream-stats-item" title="Model reported by gateway (intelligent routing)">
-              <span className="stream-stats-label">Gateway:</span>{' '}
+            <span className="stream-stats-item" title={t('streamStats.modelReportedByGateway')}>
+              <span className="stream-stats-label">{t('streamStats.gateway')}</span>{' '}
               <span className="stream-stats-value">{studioChosenModel}</span>
             </span>
           ) : null}
           {studioMemoryTokensUsed != null && Number.isFinite(studioMemoryTokensUsed) ? (
-            <span className="stream-stats-item" title="Long-term memory tokens used for this reply">
-              <span className="stream-stats-label">Mem:</span>{' '}
+            <span className="stream-stats-item" title={t('streamStats.memoryTokensUsed')}>
+              <span className="stream-stats-label">{t('streamStats.memoryShort')}</span>{' '}
               <span className="stream-stats-value">{Math.round(studioMemoryTokensUsed)}</span>
             </span>
           ) : null}

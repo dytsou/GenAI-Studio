@@ -14,9 +14,11 @@ import { ToggleRight, ToggleLeft } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type { QueuedSend } from './queuedSendTypes';
 import { popFirstSendable } from './queueUtils';
+import { useTranslation } from 'react-i18next';
 import './Chat.css';
 
 export function Chat() {
+  const { t } = useTranslation();
   const { chats, activeChatId, addMessage, updateMessage, deleteMessageAndSubsequent, deleteLastMessage } = useChatStore();
   const settings = useSettingsStore();
 
@@ -363,7 +365,7 @@ export function Chat() {
   if (!activeChat) {
     return (
       <div className="chat-empty-state">
-        <p>Select or create a chat to begin.</p>
+        <p>{t('chat.emptySelectOrCreate')}</p>
       </div>
     );
   }
@@ -384,14 +386,14 @@ export function Chat() {
              onClick={() => settings.setSettings({ structuredOutputMode: !settings.structuredOutputMode })}
            >
              {settings.structuredOutputMode ? <ToggleRight size={20} className="active-toggle" /> : <ToggleLeft size={20} />}
-             <span>Structured Output</span>
+             <span>{t('chat.structuredOutput')}</span>
            </button>
         </div>
 
         <div className="chat-messages-area">
           {messages.length === 0 ? (
             <div className="chat-welcome">
-              <h2>How can I help you today?</h2>
+              <h2>{t('chat.welcome')}</h2>
             </div>
           ) : (
             <div className="messages-list">
