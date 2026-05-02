@@ -10,8 +10,10 @@ pnpm install
 pnpm dev
 pnpm run build
 pnpm test
-pnpm run test:e2e   # HTTP harness: health, MCP discovery, intelligent chat (mocked upstream)
+pnpm run test:e2e   # HTTP harness: health, MCP discovery, /v1/chat + intelligent routes (mocked upstream)
 ```
+
+**`memory_chunks` saves** for **`POST /v1/chat`** with `X-Memory-Enabled: true` follow **`MEMORY_CHAT_SAVE_STRATEGY`** (`facts` vs `verbatim`); caps and rollout semantics are summarized in **`PARITY.md`**.
 
 **`GET /v1/mcp/discovery`** returns a JSON view of **`MCP_TOOLS_JSON`** (env-based catalog of MCP-style tool groups; there is no stdin/HTTP MCP session proxy in-process).
 

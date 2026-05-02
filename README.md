@@ -98,7 +98,7 @@ pnpm dev
 
 ### Hosted gateway (optional)
 
-The Express gateway under `deploy/gateway` is a **separate pnpm package** (not the root `pnpm install`). See [deploy/README.md](deploy/README.md) for `pnpm install`, `pnpm dev`, `pnpm test`, `pnpm run test:e2e`, and Docker Compose.
+The Express gateway under `deploy/gateway` is a **separate pnpm package** (not the root `pnpm install`). See [deploy/README.md](deploy/README.md) for `pnpm install`, `pnpm dev`, `pnpm test`, `pnpm run test:e2e`, and Docker Compose. Standard chat memory-save behavior (`MEMORY_CHAT_SAVE_STRATEGY`, etc.) is summarized in [deploy/PARITY.md](deploy/PARITY.md).
 
 ## Configuration Details
 

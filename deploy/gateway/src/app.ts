@@ -12,6 +12,10 @@ import {
 import { chatCompletionSingleText } from "./nonStreamCompletion.js";
 import { buildToolInventory, mcpServersFromEnvJson } from "./toolInventory.js";
 import { sseDone, streamSseUpstream } from "./streamUtil.js";
+import {
+  assistantTextFromOpenAiCompletionJson,
+  saveChatTurnToLongTermMemory,
+} from "./chatMemorySave.js";
 
 function cloneJsonBody(raw: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(raw ?? {})) as Record<string, unknown>;
@@ -233,6 +237,39 @@ export function createApp(): express.Application {
       return res.status(upstreamResp.status).type("application/json").send(t);
     }
 
+    const contentType = upstreamResp.headers.get("content-type") ?? "";
+    const isEventStream =
+      contentType.toLowerCase().includes("text/event-stream");
+    const pool = getPgPool();
+    const lastUserForSave = userContextSnippet;
+    const chatModel = String(bodyPayload.model ?? "");
+
+    if (!isEventStream) {
+      const raw = await upstreamResp.text();
+      res.status(upstreamResp.status);
+      const ct = upstreamResp.headers.get("content-type");
+      if (ct) res.setHeader("Content-Type", ct);
+      res.send(Buffer.from(raw, "utf8"));
+      if (memEnabled) {
+        let envelope: unknown;
+        try {
+          envelope = JSON.parse(raw) as unknown;
+        } catch {
+          envelope = null;
+        }
+        const assistantText = assistantTextFromOpenAiCompletionJson(envelope);
+        void saveChatTurnToLongTermMemory({
+          pool,
+          upstream: up,
+          workspaceId,
+          lastUserText: lastUserForSave,
+          assistantText,
+          chatModel,
+        });
+      }
+      return;
+    }
+
     if (!upstreamResp.body)
       return res
         .status(502)
@@ -253,10 +290,13 @@ export function createApp(): express.Application {
         prelude,
       );
       if (memEnabled) {
-        void saveAssistantMemory({
+        void saveChatTurnToLongTermMemory({
+          pool,
           upstream: up,
           workspaceId,
-          text: collected.assistantText,
+          lastUserText: lastUserForSave,
+          assistantText: collected.assistantText,
+          chatModel,
         });
       }
       sseDone(res);

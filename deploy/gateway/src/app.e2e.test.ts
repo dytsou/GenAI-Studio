@@ -1,6 +1,6 @@
 /**
  * Route-level harness (Vitest + supertest + mocked fetch).
- * Plan: Intelligent path + MCP discovery + health; concurrency 409.
+ * Plan: Intelligent path + MCP discovery + /v1/chat JSON proxy + health; 409 concurrency.
  */
 import request from "supertest";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,40 +25,42 @@ function sseStreamFromDataPayloads(payloads: string[]) {
 }
 
 function mockFetchChatSequence() {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input);
-      const bodyRaw = typeof init?.body === "string" ? init.body : "";
-      let body: { stream?: boolean } = {};
-      try {
-        body = bodyRaw ? JSON.parse(bodyRaw) : {};
-      } catch {
-        return new Response("bad json", { status: 500 });
-      }
-
-      if (url.includes("/chat/completions")) {
-        if (!body.stream) {
-          return new Response(
-            JSON.stringify({
-              choices: [{ message: { content: "- think bullet" } }],
-            }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          );
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        const bodyRaw = typeof init?.body === "string" ? init.body : "";
+        let body: { stream?: boolean } = {};
+        try {
+          body = bodyRaw ? JSON.parse(bodyRaw) : {};
+        } catch {
+          return new Response("bad json", { status: 500 });
         }
 
-        const stream = sseStreamFromDataPayloads([
-          '{"choices":[{"delta":{"content":"Hey"}}]}',
-          "[DONE]",
-        ]);
-        return new Response(stream, {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        });
-      }
+        if (url.includes("/chat/completions")) {
+          if (!body.stream) {
+            return new Response(
+              JSON.stringify({
+                choices: [{ message: { content: "- think bullet" } }],
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
 
-      return new Response("unexpected", { status: 599 });
-    },
-  );
+          const stream = sseStreamFromDataPayloads([
+            '{"choices":[{"delta":{"content":"Hey"}}]}',
+            "[DONE]",
+          ]);
+          return new Response(stream, {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }
+
+        return new Response("unexpected", { status: 599 });
+      },
+    );
 }
 
 const intelHeaders = {
@@ -119,6 +121,44 @@ describe("gateway e2e (supertest)", () => {
     expect(res.text).toContain('"kind":"meta"');
     expect(res.text).toContain("Hey");
     expect(res.text).toContain("[DONE]");
+  });
+
+  it("POST /v1/chat proxies non-stream application/json completions (upstream not SSE)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (!url.includes("/chat/completions")) {
+          return new Response("unexpected", { status: 599 });
+        }
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "Short JSON reply." } }],
+            id: "cmpl-json-nonstream-e2e",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      },
+    );
+    const app = createApp();
+    const res = await request(app)
+      .post("/v1/chat")
+      .set({
+        Authorization: "Bearer test-token",
+        "X-Upstream-Base-Url": "https://api.openai.com/v1",
+        "X-Memory-Enabled": "false",
+      })
+      .send({
+        model: "gpt-nonstream-proxy",
+        stream: false,
+        messages: [{ role: "user", content: "Ping" }],
+      })
+      .expect(200);
+
+    expect(String(res.headers["content-type"]).includes("application/json")).toBe(
+      true,
+    );
+    expect(res.body.choices?.[0]?.message?.content).toBe("Short JSON reply.");
+    expect(res.body.id).toBe("cmpl-json-nonstream-e2e");
   });
 
   it("POST /v1/intelligent/chat requires X-Workspace-Id", async () => {
