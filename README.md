@@ -19,6 +19,7 @@ Gateway-specific env vars live in **`deploy/.env.example`** (copy to **`deploy/.
 
 - Multi-chat sidebar with create, search, switch, and delete.
 - Streaming assistant responses (`/chat/completions` SSE-style chunks).
+- Hosted gateway **memory selection drawer** (when gateway is enabled): preview retrieved candidates, semantic-search memory, and manually include/exclude chunks per send; assistant replies show a “Memory used” disclosure.
 - Assistant messages rendered as **Markdown** (GFM) with **HTML sanitization** for safe display.
 - Attachment support:
   - Images (up to 20MB each)
@@ -168,6 +169,15 @@ Still from repo root **`pnpm dev`**, open **Settings** and configure:
 
 `X-Workspace-Id` is generated once per browser and persisted (required for Intelligent and for **409 workspace_busy** locking).
 
+#### Memory selection drawer (Composer)
+
+When **Use hosted gateway** is ON, the Composer shows a **Memory** button:
+
+- With an **empty search box**, it shows **Candidates**: the gateway’s top‑K retrieved chunks for your current draft.
+- When you **enter a query** and run search, it shows **Search results**: semantic search across stored `memory_chunks`. Clear the query to return to Candidates.
+- Click a chunk row to cycle: **include → exclude → neutral**.
+- On send, the app forwards your selection as `memory_override` (Intelligent mode) and the assistant reply shows a **“Memory used”** disclosure with the injected chunk IDs.
+
 ---
 
 **After either mode**, use **Settings → Save** so Zustand persists values to local storage.
@@ -260,6 +270,18 @@ When **Use hosted gateway** is on in Settings, the SPA posts to:
 
 Headers include `Authorization` (your API key), `X-Upstream-Base-Url`, `X-Workspace-Id` (stable per browser), `X-Memory-*`, `X-Tools-Enabled`, and when intelligent is on, `X-Studio-Intelligent-*` tier flags. **Intelligent** mode requires a non-empty `X-Workspace-Id` (the app sets this automatically). The gateway proxies to your configured upstream. For production lock down `ALLOWED_UPSTREAM_ORIGINS` and optional CORS origins — see [deploy/README.md](deploy/README.md).
 
+#### Gateway memory APIs
+
+When running the hosted gateway with Postgres memory enabled, the gateway also exposes:
+
+- `POST {gatewayBaseUrl}/v1/memory/candidates` — input `{ draft_text, top_k? }` → returns candidate chunks with `chunk_id`, `preview`, `tags`, `created_at`
+- `POST {gatewayBaseUrl}/v1/memory/search` — input `{ query, filters?, pagination? }` → returns `hits` + `next_cursor`
+
+Notes:
+
+- Chunk previews are **redacted and truncated** server-side (basic secret pattern redaction).
+- Tags are **allowlist labels** (no free-text values).
+
 ### Request payload (both modes)
 
 Payload includes:
@@ -271,6 +293,10 @@ Payload includes:
 - `max_tokens`
 - `stream: true`
 - optional `response_format` (structured output mode)
+
+When using **hosted gateway + Intelligent mode**, the request may also include:
+
+- `memory_override`: `{ include_chunk_ids?: string[]; exclude_chunk_ids?: string[]; draft_hash?: string }`
 
 This works with OpenAI-compatible chat completion endpoints.
 
