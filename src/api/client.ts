@@ -28,6 +28,29 @@ type ChatCompletionRequestPayload = {
   stream_options?: { include_usage: boolean };
 };
 
+function normalizeMaxTokensForUpstream(params: {
+  baseUrl: string;
+  payload: Record<string, unknown>;
+}) {
+  // Some OpenAI models reject `max_tokens` and require `max_completion_tokens`.
+  // Keep this rewrite local to OpenAI to avoid breaking other OpenAI-compatible providers.
+  let host = "";
+  try {
+    host = new URL(params.baseUrl).host.toLowerCase();
+  } catch {
+    host = "";
+  }
+  if (host !== "api.openai.com") return;
+
+  const maxTokens = params.payload.max_tokens;
+  const already = params.payload.max_completion_tokens;
+  if (already !== undefined) return;
+  if (typeof maxTokens !== "number" || !Number.isFinite(maxTokens)) return;
+
+  params.payload.max_completion_tokens = maxTokens;
+  delete params.payload.max_tokens;
+}
+
 export type ChatStreamEvent =
   | { type: "content"; text: string }
   | { type: "usage"; usage: ChatStreamUsage }
@@ -236,6 +259,11 @@ export async function* streamChatCompletions(
       Authorization: `Bearer ${apiKey}`,
     };
   }
+
+  normalizeMaxTokensForUpstream({
+    baseUrl,
+    payload: payload as unknown as Record<string, unknown>,
+  });
 
   const response = await fetchWithBusyRetry(
     () =>
