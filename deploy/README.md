@@ -10,7 +10,10 @@ pnpm install
 pnpm dev
 pnpm run build
 pnpm test
+pnpm run test:e2e   # HTTP harness: health, MCP discovery, intelligent chat (mocked upstream)
 ```
+
+**`GET /v1/mcp/discovery`** returns a JSON view of **`MCP_TOOLS_JSON`** (env-based catalog of MCP-style tool groups; there is no stdin/HTTP MCP session proxy in-process).
 
 Docker build uses Corepack + pinned pnpm (see `gateway/package.json` `packageManager` and `gateway/Dockerfile`).
 

@@ -75,8 +75,11 @@ jobs:
       - name: Build gateway
         run: pnpm run build
 
-      - name: Test gateway
+      - name: Test gateway (unit)
         run: pnpm test
+
+      - name: Test gateway (e2e harness)
+        run: pnpm run test:e2e
 
   pages-build:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'

@@ -17,37 +17,57 @@ function parseJsonArray(raw: string | undefined, fallback: ToolDef[]): ToolDef[]
   }
 }
 
-/** MCP-ish tools surfaced as prefixed function names (`mcp__serverName__toolName`). */
-function parseMcpTools(raw: string | undefined): ToolDef[] {
-  if (!raw) return [];
+export type McpServerDiscovery = {
+  server: string;
+  tools: Array<{ name: string; description?: string }>;
+};
+
+/** Parse `MCP_TOOLS_JSON` env into servers + tools (read-only introspection — no credential material). */
+export function mcpServersFromEnvJson(raw?: string): McpServerDiscovery[] {
+  if (!raw?.trim()) return [];
   try {
     const v = JSON.parse(raw) as Array<{
       server?: string;
       tools?: Array<{ name?: string; description?: string }>;
     }>;
     if (!Array.isArray(v)) return [];
-    const out: ToolDef[] = [];
+    const servers: McpServerDiscovery[] = [];
     for (const entry of v) {
-      const server = entry.server || 'default';
+      const server = (entry.server || 'default').replace(/__/g, '_');
+      const tools: Array<{ name: string; description?: string }> = [];
       for (const t of entry.tools || []) {
         if (!t.name) continue;
-        const fname = `mcp__${server.replace(/__/g, '_')}__${t.name}`;
-        out.push({
-          type: 'function',
-          function: {
-            name: fname,
-            description:
-              (t.description || '') +
-              '\n(Server-side MCP executor may be minimal in dev — confirm gateway config.)',
-            parameters: { type: 'object', properties: {} },
-          },
-        });
+        tools.push({ name: t.name, description: t.description });
       }
+      if (tools.length > 0) servers.push({ server, tools });
     }
-    return out;
+    return servers;
   } catch {
     return [];
   }
+}
+
+/** MCP-ish tools surfaced as prefixed function names (`mcp__serverName__toolName`). */
+function parseMcpTools(raw: string | undefined): ToolDef[] {
+  const servers = mcpServersFromEnvJson(raw);
+  const out: ToolDef[] = [];
+  for (const entry of servers) {
+    const server = entry.server;
+    for (const t of entry.tools) {
+      const fname = `mcp__${server.replace(/__/g, '_')}__${t.name}`;
+      out.push({
+        type: 'function',
+        function: {
+          name: fname,
+          description:
+            (t.description || '') +
+            '\n(Server-side MCP executor may be minimal in dev — confirm gateway config.)',
+          parameters: { type: 'object', properties: {} },
+        },
+      });
+    }
+  }
+  return out;
 }
 
 export function buildToolInventory(): { tools: ToolDef[] } {

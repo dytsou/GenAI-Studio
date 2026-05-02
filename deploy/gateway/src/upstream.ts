@@ -33,7 +33,10 @@ export type ValidateUpstreamResult =
   | { ok: true }
   | {
       ok: false;
-      code: "invalid_upstream_url" | "private_upstream_forbidden" | "upstream_origin_not_allowed";
+      code:
+        | "invalid_upstream_url"
+        | "private_upstream_forbidden"
+        | "upstream_origin_not_allowed";
     };
 
 export function validateUpstreamUrl(baseUrl: string): ValidateUpstreamResult {
@@ -42,7 +45,10 @@ export function validateUpstreamUrl(baseUrl: string): ValidateUpstreamResult {
 
   const list = process.env.ALLOWED_UPSTREAM_ORIGINS?.trim();
   if (list) {
-    const allowed = list.split(",").map((s) => s.trim()).filter(Boolean);
+    const allowed = list
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     for (const entry of allowed) {
       const norm = entry.replace(/\/+$/, "");
       const ao = normalizeUpstreamOrigin(norm);
@@ -51,10 +57,9 @@ export function validateUpstreamUrl(baseUrl: string): ValidateUpstreamResult {
     return { ok: false, code: "upstream_origin_not_allowed" };
   }
 
-  const blockPrivate =
-    ["1", "true", "yes"].includes(
-      String(process.env.GATEWAY_BLOCK_PRIVATE_UPSTREAM || "").toLowerCase(),
-    );
+  const blockPrivate = ["1", "true", "yes"].includes(
+    String(process.env.GATEWAY_BLOCK_PRIVATE_UPSTREAM || "").toLowerCase(),
+  );
   if (blockPrivate) {
     try {
       const host = new URL(baseUrl).hostname;

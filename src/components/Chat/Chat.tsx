@@ -40,7 +40,6 @@ export function Chat() {
 
   useEffect(() => {
     // Outbound queue is per-thread; discard when switching active chat.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSendQueue([]);
   }, [activeChatId]);
 

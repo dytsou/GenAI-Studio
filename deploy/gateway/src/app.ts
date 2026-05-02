@@ -10,7 +10,7 @@ import {
   retrieveTopKChunks,
 } from "./memoryService.js";
 import { chatCompletionSingleText } from "./nonStreamCompletion.js";
-import { buildToolInventory } from "./toolInventory.js";
+import { buildToolInventory, mcpServersFromEnvJson } from "./toolInventory.js";
 import { sseDone, streamSseUpstream } from "./streamUtil.js";
 
 function cloneJsonBody(raw: unknown): Record<string, unknown> {
@@ -104,7 +104,10 @@ async function saveAssistantMemory(params: {
 function corsMw() {
   const raw = process.env.ALLOWED_ORIGINS?.trim();
   if (!raw) return cors({ origin: true, credentials: false });
-  const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  const list = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return cors({
     origin(origin, cb) {
       if (!origin) return cb(null, true);
@@ -121,7 +124,10 @@ export function createApp(): express.Application {
   const jsonLimit = process.env.EXPRESS_JSON_LIMIT?.trim() || "10mb";
   app.use(express.json({ limit: jsonLimit }));
 
-  function upstreamOr401(res: ExpressResponse, ur: ReadUpstreamResult): ur is {
+  function upstreamOr401(
+    res: ExpressResponse,
+    ur: ReadUpstreamResult,
+  ): ur is {
     ok: true;
     auth: string;
     baseUrl: string;
@@ -137,6 +143,14 @@ export function createApp(): express.Application {
 
   app.get("/v1/tools/inventory", (_req, res) => {
     res.json(buildToolInventory());
+  });
+
+  /** MCP “discovery” surface for env-configured tools (`MCP_TOOLS_JSON`) — read-only catalog, no secrets. */
+  app.get("/v1/mcp/discovery", (_req, res) => {
+    res.json({
+      source: "env",
+      servers: mcpServersFromEnvJson(process.env.MCP_TOOLS_JSON),
+    });
   });
 
   app.post("/v1/chat", async (req, res) => {
@@ -308,8 +322,7 @@ export function createApp(): express.Application {
       const rawMessages = [
         ...(payload.messages as Array<{ role: string; content: unknown }>),
       ];
-      const userContextSnippet =
-        extractLastUserTextForRetrieval(rawMessages);
+      const userContextSnippet = extractLastUserTextForRetrieval(rawMessages);
 
       if (retrieveMemory && workspaceId) {
         const { text, tokenEst } = await buildMemorySystemBlock({
