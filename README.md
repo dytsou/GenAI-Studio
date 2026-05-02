@@ -148,7 +148,7 @@ When **Use hosted gateway** is on in Settings, the SPA posts to:
 - `{gatewayBaseUrl}/v1/chat`, or
 - `{gatewayBaseUrl}/v1/intelligent/chat` when **Intelligent mode** is on
 
-Headers include `Authorization` (your API key), `X-Upstream-Base-Url`, `X-Workspace-Id` (stable per browser), `X-Memory-*`, `X-Tools-Enabled`, and when intelligent is on, `X-Studio-Intelligent-*` tier flags. The gateway proxies to your configured upstream. Details: [deploy/README.md](deploy/README.md).
+Headers include `Authorization` (your API key), `X-Upstream-Base-Url`, `X-Workspace-Id` (stable per browser), `X-Memory-*`, `X-Tools-Enabled`, and when intelligent is on, `X-Studio-Intelligent-*` tier flags. **Intelligent** mode requires a non-empty `X-Workspace-Id` (the app sets this automatically). The gateway proxies to your configured upstream. For production lock down `ALLOWED_UPSTREAM_ORIGINS` and optional CORS origins — see [deploy/README.md](deploy/README.md).
 
 ### Request payload (both modes)
 
