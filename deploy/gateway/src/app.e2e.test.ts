@@ -134,4 +134,98 @@ describe("gateway e2e (supertest)", () => {
 
     expect(String(res.body.error?.message)).toContain("Workspace");
   });
+
+  /**
+   * Concurrency guard: deterministic by holding the handler on the streaming
+   * upstream fetch until a second client is proven to observe `workspace_busy`.
+   * (Previously flaky tests raced two concurrent supertest POSTs.)
+   */
+  it("POST /v1/intelligent/chat returns 409 workspace_busy while same workspace in-flight", async () => {
+    let unblockStream!: () => void;
+    const streamHold = new Promise<void>((resolve) => {
+      unblockStream = resolve;
+    });
+
+    let markStreamEntered!: () => void;
+    const streamEntered = new Promise<void>((resolve) => {
+      markStreamEntered = resolve;
+    });
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input);
+        if (!url.includes("/chat/completions"))
+          return new Response("unexpected", { status: 599 });
+
+        const bodyRaw = typeof init?.body === "string" ? init.body : "";
+        let body: { stream?: boolean } = {};
+        try {
+          body = bodyRaw ? JSON.parse(bodyRaw) : {};
+        } catch {
+          return new Response("bad json", { status: 500 });
+        }
+
+        if (!body.stream) {
+          return new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "- think bullet" } }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        markStreamEntered();
+        await streamHold;
+
+        const stream = sseStreamFromDataPayloads([
+          '{"choices":[{"delta":{"content":"ok"}}]}',
+          "[DONE]",
+        ]);
+        return new Response(stream, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      },
+    );
+
+    const app = createApp();
+    const busyHeaders = {
+      ...intelHeaders,
+      "X-Workspace-Id": "ws-409-busy-deterministic",
+    };
+
+    const res1Promise = request(app)
+      .post("/v1/intelligent/chat")
+      .set(busyHeaders)
+      .send({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "hold lock" }],
+      });
+
+    /** SuperAgent only sends once the promise chain is subscribed — prime the flight. */
+    void res1Promise.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    await streamEntered;
+
+    const resBusy = await request(app)
+      .post("/v1/intelligent/chat")
+      .set(busyHeaders)
+      .send({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: "concurrent" }],
+      });
+
+    expect(resBusy.status).toBe(409);
+    expect(resBusy.body?.error?.message).toBe("workspace_busy");
+    expect(String(resBusy.headers["retry-after"])).toBe("2");
+
+    unblockStream();
+
+    const res1 = await res1Promise;
+    expect(res1.status).toBe(200);
+    expect(res1.text).toContain("ok");
+  });
 });
