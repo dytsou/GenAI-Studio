@@ -5,6 +5,7 @@ import {
 import type { Pool } from "pg";
 import { embedText, insertMemoryChunk } from "./memoryService.js";
 import { autoTagMemoryContent } from "./memoryApiTypes.js";
+import { extractMemoryKeyphrases } from "./memoryKeyphrasesExtract.js";
 
 const VERBATIM_ASSISTANT_MIN_CHARS = 24;
 
@@ -67,12 +68,19 @@ export async function saveChatTurnToLongTermMemory(params: {
           baseUrl: upstream.baseUrl,
           text: trimmedAssistant.slice(0, 8000),
         })) || null;
+      const keyphrases =
+        (await extractMemoryKeyphrases({
+          upstream,
+          model: params.chatModel,
+          content: trimmedAssistant,
+        })) || [];
       await insertMemoryChunk({
         pool,
         workspaceId,
         content: trimmedAssistant.slice(0, 32_000),
         embedding: emb,
         tags: autoTagMemoryContent(trimmedAssistant),
+        keyphrases,
       });
     } catch (e) {
       console.warn("[memory-chat] verbatim insert failed", e);
@@ -98,12 +106,19 @@ export async function saveChatTurnToLongTermMemory(params: {
           baseUrl: upstream.baseUrl,
           text: text.slice(0, 8000),
         })) || null;
+      const keyphrases =
+        (await extractMemoryKeyphrases({
+          upstream,
+          model: params.chatModel,
+          content: text,
+        })) || [];
       await insertMemoryChunk({
         pool,
         workspaceId,
         content: text.slice(0, 32_000),
         embedding: emb,
         tags: autoTagMemoryContent(text),
+        keyphrases,
       });
     } catch (e) {
       console.warn("[memory-chat] fact insert failed", e);

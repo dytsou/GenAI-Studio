@@ -19,6 +19,7 @@ import {
   assistantTextFromOpenAiCompletionJson,
   saveChatTurnToLongTermMemory,
 } from "./chatMemorySave.js";
+import { extractMemoryKeyphrases } from "./memoryKeyphrasesExtract.js";
 
 function cloneJsonBody(raw: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(raw ?? {})) as Record<string, unknown>;
@@ -113,6 +114,12 @@ async function saveAssistantMemory(params: {
   const pool = getPgPool();
   if (!pool || !params.workspaceId) return;
   try {
+    const keyphrases =
+      (await extractMemoryKeyphrases({
+        upstream: params.upstream,
+        model: "",
+        content: params.text,
+      })) || [];
     const emb =
       (await embedText({
         auth: params.upstream.auth,
@@ -124,6 +131,7 @@ async function saveAssistantMemory(params: {
       workspaceId: params.workspaceId,
       content: params.text.slice(0, 32_000),
       embedding: emb,
+      keyphrases,
     });
   } catch (e) {
     console.warn("[memory] insert failed", e);

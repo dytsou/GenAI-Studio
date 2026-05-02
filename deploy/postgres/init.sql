@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS memory_chunks (
   content TEXT NOT NULL,
   embedding DOUBLE PRECISION[],
   tags TEXT[] NOT NULL DEFAULT '{}',
+  keyphrases TEXT[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

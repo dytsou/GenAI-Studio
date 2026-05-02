@@ -17,11 +17,15 @@ async function ensureMemorySchema(pool: pg.Pool): Promise<void> {
       content TEXT NOT NULL,
       embedding DOUBLE PRECISION[],
       tags TEXT[] NOT NULL DEFAULT '{}',
+      keyphrases TEXT[] NOT NULL DEFAULT '{}',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
   await pool.query(
     `ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}';`,
+  );
+  await pool.query(
+    `ALTER TABLE memory_chunks ADD COLUMN IF NOT EXISTS keyphrases TEXT[] NOT NULL DEFAULT '{}';`,
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS memory_chunks_workspace_idx ON memory_chunks (workspace_id);`,
@@ -120,6 +124,7 @@ export type MemoryChunkDbRow = {
   embedding: number[] | null;
   created_at: string;
   tags: string[] | null;
+  keyphrases: string[] | null;
 };
 
 export type MemoryChunkHit = {
@@ -127,6 +132,7 @@ export type MemoryChunkHit = {
   content: string;
   created_at: string;
   tags: string[];
+  keyphrases: string[];
   score: number;
 };
 
@@ -153,7 +159,7 @@ export async function retrieveTopKChunkHits(params: {
     Math.max(50, Math.floor(params.scanLimit ?? 500)),
   );
   const { rows } = await params.pool.query<MemoryChunkDbRow>(
-    `SELECT id, content, embedding, created_at, tags
+    `SELECT id, content, embedding, created_at, tags, keyphrases
      FROM memory_chunks
      WHERE workspace_id = $1
      ORDER BY created_at DESC
@@ -166,6 +172,7 @@ export async function retrieveTopKChunkHits(params: {
       content: r.content,
       created_at: r.created_at,
       tags: Array.isArray(r.tags) ? r.tags : [],
+      keyphrases: Array.isArray(r.keyphrases) ? r.keyphrases : [],
       score: Array.isArray(r.embedding)
         ? cosineSimilarity(params.embedding, r.embedding)
         : 0,
@@ -214,7 +221,7 @@ export async function searchChunkHits(params: {
   args.push(scanLimit);
 
   const { rows } = await params.pool.query<MemoryChunkDbRow>(
-    `SELECT id, content, embedding, created_at, tags
+    `SELECT id, content, embedding, created_at, tags, keyphrases
      FROM memory_chunks
      WHERE ${where.join(" AND ")}
      ORDER BY created_at DESC
@@ -228,6 +235,7 @@ export async function searchChunkHits(params: {
       content: r.content,
       created_at: r.created_at,
       tags: Array.isArray(r.tags) ? r.tags : [],
+      keyphrases: Array.isArray(r.keyphrases) ? r.keyphrases : [],
       score: Array.isArray(r.embedding)
         ? cosineSimilarity(params.embedding, r.embedding)
         : 0,
@@ -248,6 +256,7 @@ export async function loadChunksByIds(params: {
     content: string;
     created_at: string;
     tags: string[];
+    keyphrases: string[];
   }>
 > {
   const ids = Array.from(new Set(params.chunkIds)).filter(Boolean);
@@ -257,8 +266,9 @@ export async function loadChunksByIds(params: {
     content: string;
     created_at: string;
     tags: string[] | null;
+    keyphrases: string[] | null;
   }>(
-    `SELECT id, content, created_at, tags
+    `SELECT id, content, created_at, tags, keyphrases
      FROM memory_chunks
      WHERE workspace_id = $1 AND id = ANY($2::uuid[])`,
     [params.workspaceId, ids],
@@ -271,6 +281,7 @@ export async function loadChunksByIds(params: {
         content: r.content,
         created_at: r.created_at,
         tags: Array.isArray(r.tags) ? r.tags : [],
+        keyphrases: Array.isArray(r.keyphrases) ? r.keyphrases : [],
       },
     ]),
   );
@@ -286,13 +297,23 @@ export async function insertMemoryChunk(params: {
   content: string;
   embedding: number[] | null;
   tags?: unknown;
+  keyphrases?: unknown;
 }): Promise<void> {
   const tags =
     params.tags === undefined
       ? autoTagMemoryContent(params.content)
       : sanitizeMemoryTags(params.tags);
+  const keyphrases =
+    params.keyphrases === undefined
+      ? []
+      : Array.isArray(params.keyphrases)
+        ? params.keyphrases
+            .filter((p): p is string => typeof p === "string")
+            .map((p) => p.trim())
+            .filter(Boolean)
+        : [];
   await params.pool.query(
-    `INSERT INTO memory_chunks (workspace_id, content, embedding, tags) VALUES ($1, $2, $3, $4)`,
-    [params.workspaceId, params.content, params.embedding, tags],
+    `INSERT INTO memory_chunks (workspace_id, content, embedding, tags, keyphrases) VALUES ($1, $2, $3, $4, $5)`,
+    [params.workspaceId, params.content, params.embedding, tags, keyphrases],
   );
 }
