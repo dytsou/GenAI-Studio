@@ -10,7 +10,7 @@ describe("memory routes", () => {
     const res = await request(app).get("/v1/memory/recent").expect(400);
     expect(String(res.body.error?.message)).toContain("Workspace");
   });
-  +it("GET /v1/memory/recent returns 503 when DB missing", async () => {
+  it("GET /v1/memory/recent returns 503 when DB missing", async () => {
     const old = process.env.DATABASE_URL;
     delete process.env.DATABASE_URL;
     const app = createApp();
@@ -20,7 +20,7 @@ describe("memory routes", () => {
       .expect(503);
     if (old) process.env.DATABASE_URL = old;
   });
-  +it("GET /v1/memory/recent returns chunks with preview and tags", async () => {
+  it("GET /v1/memory/recent returns chunks with preview, tags, and keyphrases", async () => {
     vi.spyOn(memoryService, "getPgPool").mockReturnValue({
       query: vi.fn(async () => ({
         rows: [
@@ -29,6 +29,7 @@ describe("memory routes", () => {
             content: "hello world",
             created_at: "2026-05-03T00:00:00.000Z",
             tags: ["fact"],
+            keyphrases: ["hello", "world"],
           },
         ],
       })),
@@ -47,6 +48,7 @@ describe("memory routes", () => {
       created_at: "2026-05-03T00:00:00.000Z",
       preview: expect.any(String),
       tags: ["fact"],
+      keyphrases: ["hello", "world"],
     });
   });
 });

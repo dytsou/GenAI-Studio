@@ -15,7 +15,7 @@ describe("sanitizeAndCapKeyphrases", () => {
       ],
       { maxItems: 3, maxPerItemChars: 10, maxTotalChars: 999 },
     );
-    expect(out).toEqual(["project roa", "aaaaaaaaaa", "budget"]);
+    expect(out).toEqual(["project ro", "aaaaaaaaaa", "budget"]);
   });
 
   it("drops sentence-like outputs and secret-ish fragments", () => {

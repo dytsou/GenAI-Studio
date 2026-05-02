@@ -27,6 +27,7 @@ export function sanitizeAndCapKeyphrases(
   if (!Array.isArray(raw)) return [];
 
   const out: string[] = [];
+  const seen = new Set<string>();
   let totalChars = 0;
 
   for (const item of raw) {
@@ -39,15 +40,17 @@ export function sanitizeAndCapKeyphrases(
     if (looksLikeApiSecretLine(s)) continue;
     if (s.length > caps.maxPerItemChars) s = s.slice(0, caps.maxPerItemChars);
     if (isProbablySentence(s)) continue;
+    if (seen.has(s)) continue;
 
     if (out.length >= caps.maxItems) break;
     if (totalChars + s.length > caps.maxTotalChars) break;
 
     out.push(s);
+    seen.add(s);
     totalChars += s.length;
   }
 
-  return Array.from(new Set(out));
+  return out;
 }
 
 export function parseKeyphrasesFromMessageBody(json: unknown): string[] | null {

@@ -582,12 +582,37 @@ export function createApp(): express.Application {
         res as ExpressResponse,
         prelude,
       );
+
+      let injectedChunks: Array<{
+        chunk_id: string;
+        tags: string[];
+        keyphrases: string[];
+      }> = [];
+      try {
+        const pool = getPgPool();
+        if (pool && injectedChunkIds.length) {
+          injectedChunks = (
+            await loadChunksByIds({
+              pool,
+              workspaceId,
+              chunkIds: injectedChunkIds,
+            })
+          ).map((c) => ({
+            chunk_id: c.chunk_id,
+            tags: c.tags,
+            keyphrases: c.keyphrases,
+          }));
+        }
+      } catch {
+        injectedChunks = [];
+      }
       sseWrite(res as ExpressResponse, {
         studio: {
           v: 1,
           kind: "memory_injection",
           mode: memoryMode,
           chunk_ids_injected: injectedChunkIds,
+          chunks_injected: injectedChunks,
           memory_tokens_estimate: memoryTokEst,
         },
       });

@@ -6,6 +6,7 @@ export type MemoryChunkRow = {
   created_at: string;
   preview: string;
   tags: string[];
+  keyphrases: string[];
   rank?: number;
   relevance_bucket?: "high" | "medium" | "low";
 };

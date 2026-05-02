@@ -259,6 +259,7 @@ export function Chat() {
             memoryInjection: {
               mode: mem.mode,
               chunkIdsInjected: Array.isArray(mem.chunk_ids_injected) ? mem.chunk_ids_injected : [],
+              chunksInjected: Array.isArray((mem as any).chunks_injected) ? (mem as any).chunks_injected : undefined,
               memoryTokensEstimate:
                 typeof mem.memory_tokens_estimate === 'number' ? mem.memory_tokens_estimate : null,
             },

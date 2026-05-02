@@ -19,6 +19,11 @@ export interface Message {
   memoryInjection?: {
     mode: "disabled" | "auto" | "manual";
     chunkIdsInjected: string[];
+    chunksInjected?: Array<{
+      chunk_id: string;
+      tags: string[];
+      keyphrases: string[];
+    }>;
     memoryTokensEstimate: number | null;
   };
   recentMemory?: {
@@ -28,6 +33,7 @@ export interface Message {
       created_at: string;
       preview: string;
       tags: string[];
+      keyphrases?: string[];
     }>;
   };
 }

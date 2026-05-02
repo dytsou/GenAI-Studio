@@ -44,7 +44,7 @@ describe("eventsFromSseDataJson", () => {
 
   it("parses studio memory_injection envelope", () => {
     const ev = eventsFromSseDataJson(
-      '{"studio":{"v":1,"kind":"memory_injection","mode":"manual","chunk_ids_injected":["c1","c2"],"memory_tokens_estimate":12}}',
+      '{"studio":{"v":1,"kind":"memory_injection","mode":"manual","chunk_ids_injected":["c1","c2"],"chunks_injected":[{"chunk_id":"c1","tags":["fact"],"keyphrases":["project roadmap"]}],"memory_tokens_estimate":12}}',
     );
     expect(ev).toEqual([
       {
@@ -53,6 +53,9 @@ describe("eventsFromSseDataJson", () => {
           kind: "memory_injection",
           mode: "manual",
           chunk_ids_injected: ["c1", "c2"],
+          chunks_injected: [
+            { chunk_id: "c1", tags: ["fact"], keyphrases: ["project roadmap"] },
+          ],
           memory_tokens_estimate: 12,
         }),
       },

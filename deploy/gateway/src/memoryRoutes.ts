@@ -77,8 +77,9 @@ export function createMemoryRoutes(): express.Router {
       content: string;
       created_at: string;
       tags: string[] | null;
+      keyphrases: string[] | null;
     }>(
-      `SELECT id, content, created_at, tags
+      `SELECT id, content, created_at, tags, keyphrases
        FROM memory_chunks
        WHERE workspace_id = $1
        ORDER BY created_at DESC
@@ -93,6 +94,7 @@ export function createMemoryRoutes(): express.Router {
         created_at: r.created_at,
         preview: makeChunkPreview(r.content),
         tags: Array.isArray(r.tags) ? r.tags : [],
+        keyphrases: Array.isArray(r.keyphrases) ? r.keyphrases : [],
       })),
     });
   });
@@ -163,6 +165,7 @@ export function createMemoryRoutes(): express.Router {
       created_at: h.created_at,
       preview: makeChunkPreview(h.content),
       tags: h.tags,
+      keyphrases: h.keyphrases,
       rank: idx + 1,
       relevance_bucket: relevanceBucket(h.score),
     }));
@@ -254,6 +257,7 @@ export function createMemoryRoutes(): express.Router {
       created_at: h.created_at,
       preview: makeChunkPreview(h.content),
       tags: h.tags,
+      keyphrases: h.keyphrases,
       rank: offset + i + 1,
       relevance_bucket: relevanceBucket(h.score),
     }));

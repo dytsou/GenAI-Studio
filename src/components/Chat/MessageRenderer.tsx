@@ -78,9 +78,30 @@ export const MessageRenderer = memo(function MessageRenderer({ message, onRegene
               {mem.memoryTokensEstimate != null ? ` · ~${Math.round(mem.memoryTokensEstimate)} tok` : ''}
             </summary>
             <div className="message-memory-used-body">
-              <div className="message-memory-used-ids">
-                {mem.chunkIdsInjected.length ? mem.chunkIdsInjected.join(', ') : '(none)'}
-              </div>
+              {Array.isArray(mem.chunksInjected) && mem.chunksInjected.length ? (
+                <div className="message-memory-used-chips">
+                  {mem.chunksInjected.flatMap((c) =>
+                    (c.keyphrases ?? []).length
+                      ? (c.keyphrases ?? []).slice(0, 12).map((k) => (
+                          <span key={`${c.chunk_id}:${k}`} className="message-memory-chip">
+                            {k}
+                          </span>
+                        ))
+                      : [
+                          <span
+                            key={`${c.chunk_id}:none`}
+                            className="message-memory-chip empty"
+                          >
+                            No keywords
+                          </span>,
+                        ],
+                  )}
+                </div>
+              ) : (
+                <div className="message-memory-used-ids">
+                  {mem.chunkIdsInjected.length ? mem.chunkIdsInjected.join(', ') : '(none)'}
+                </div>
+              )}
             </div>
           </details>
         ) : null}

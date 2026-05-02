@@ -22,6 +22,11 @@ export type StudioMemoryInjectionPayload = {
   kind: "memory_injection";
   mode: "disabled" | "auto" | "manual";
   chunk_ids_injected: string[];
+  chunks_injected?: Array<{
+    chunk_id: string;
+    tags: string[];
+    keyphrases: string[];
+  }>;
   memory_tokens_estimate?: number;
 };
 

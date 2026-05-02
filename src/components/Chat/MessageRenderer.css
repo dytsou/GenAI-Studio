@@ -90,6 +90,27 @@
   word-break: break-all;
 }
 
+.message-memory-used-chips {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-family: inherit;
+  word-break: normal;
+}
+
+.message-memory-chip {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.message-memory-chip.empty {
+  opacity: 0.75;
+}
+
 /* Markdown styling */
 .markdown-prose {
   color: var(--text-primary);

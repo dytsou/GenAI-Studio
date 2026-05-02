@@ -124,6 +124,16 @@ export function MemoryDrawer(props: {
     ? 'No matches for this query.'
     : 'No relevant memory found for this draft yet.';
 
+  const renderKeyphrases = (c: MemoryChunkRow) => {
+    const phrases = Array.isArray(c.keyphrases) ? c.keyphrases.filter(Boolean) : [];
+    if (!phrases.length) return <span className="memory-keyphrase-empty">No keywords</span>;
+    return phrases.slice(0, 12).map((k) => (
+      <span key={`${c.chunk_id}:${k}`} className="memory-keyphrase">
+        {k}
+      </span>
+    ));
+  };
+
   if (!open) return null;
 
   return (
@@ -189,7 +199,7 @@ export function MemoryDrawer(props: {
                 <div className="memory-recent-list">
                   {recent.slice(0, 6).map((c) => (
                     <div key={c.chunk_id} className="memory-recent-row">
-                      <div className="memory-recent-preview">{c.preview}</div>
+                      <div className="memory-recent-keyphrases">{renderKeyphrases(c)}</div>
                       <div className="memory-recent-meta">
                         <span>{new Date(c.created_at).toLocaleString()}</span>
                         <span>{(c.tags ?? []).slice(0, 2).join(', ')}</span>
@@ -240,7 +250,7 @@ export function MemoryDrawer(props: {
                       <span className="memory-chunk-bucket">{c.relevance_bucket ?? ''}</span>
                       <span className="memory-chunk-time">{new Date(c.created_at).toLocaleString()}</span>
                     </div>
-                    <div className="memory-chunk-preview">{c.preview}</div>
+                    <div className="memory-chunk-keyphrases">{renderKeyphrases(c)}</div>
                     <div className="memory-chunk-tags">
                       {(c.tags ?? []).slice(0, 6).map((t) => (
                         <span key={t} className="memory-tag">
