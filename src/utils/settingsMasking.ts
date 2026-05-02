@@ -8,6 +8,15 @@ export type StoredSettings = {
   contextWindowTokens: number;
   includeStreamUsage: boolean;
   systemPrompt: string;
+  useHostedGateway: boolean;
+  gatewayBaseUrl: string;
+  useIntelligentMode: boolean;
+  memoryEnabled: boolean;
+  memoryTopK: number;
+  toolsEnabled: boolean;
+  intelligentIncludeSessionMemory: boolean;
+  intelligentIncludeGlobalMemory: boolean;
+  intelligentRevealMemoryUi: boolean;
 };
 
 export type MaskedSettingsDraft = {
@@ -20,11 +29,18 @@ export type MaskedSettingsDraft = {
   contextWindowTokens: number | '';
   includeStreamUsage: boolean;
   systemPrompt: string;
+  gatewayBaseUrl: string;
+  useHostedGateway: boolean;
+  useIntelligentMode: boolean;
+  memoryEnabled: boolean;
+  memoryTopK: number | '';
+  toolsEnabled: boolean;
+  intelligentIncludeSessionMemory: boolean;
+  intelligentIncludeGlobalMemory: boolean;
+  intelligentRevealMemoryUi: boolean;
 };
 
-export type MergeMaskedSettingsResult =
-  | { merged: StoredSettings }
-  | { error: string };
+export type MergeMaskedSettingsResult = { merged: StoredSettings } | { error: string };
 
 /**
  * Merge masked draft values into stored settings.
@@ -47,12 +63,31 @@ export function mergeMaskedSettings(params: {
       draft.contextWindowTokens === '' ? stored.contextWindowTokens : draft.contextWindowTokens,
     includeStreamUsage: draft.includeStreamUsage,
     systemPrompt: draft.systemPrompt,
+    useHostedGateway: draft.useHostedGateway,
+    gatewayBaseUrl:
+      draft.gatewayBaseUrl.trim() !== '' ? draft.gatewayBaseUrl.trim() : stored.gatewayBaseUrl,
+    useIntelligentMode: draft.useIntelligentMode,
+    memoryEnabled: draft.memoryEnabled,
+    memoryTopK: draft.memoryTopK === '' ? stored.memoryTopK : draft.memoryTopK,
+    toolsEnabled: draft.toolsEnabled,
+    intelligentIncludeSessionMemory: draft.intelligentIncludeSessionMemory,
+    intelligentIncludeGlobalMemory: draft.intelligentIncludeGlobalMemory,
+    intelligentRevealMemoryUi: draft.intelligentRevealMemoryUi,
   };
 
   if (!merged.apiKey) {
     return { error: 'Please enter an API Key.' };
   }
 
+  const topK =
+    typeof merged.memoryTopK === 'number'
+      ? Math.min(16, Math.max(1, Math.floor(merged.memoryTopK)))
+      : 8;
+  merged.memoryTopK = topK;
+
+  if (merged.useIntelligentMode && !merged.useHostedGateway) {
+    merged.useIntelligentMode = false;
+  }
+
   return { merged };
 }
-
