@@ -31,12 +31,18 @@ export function Chat() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [sendQueue, setSendQueue] = useState<QueuedSend[]>([]);
   const sendQueueRef = useRef<QueuedSend[]>([]);
-  sendQueueRef.current = sendQueue;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    sendQueueRef.current = sendQueue;
+  }, [sendQueue]);
+
+  useEffect(() => {
+    // Outbound queue is per-thread; discard when switching active chat.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSendQueue([]);
   }, [activeChatId]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const updateQueuedSend = useCallback(
     (id: string, patch: Partial<Pick<QueuedSend, 'content' | 'attachments' | 'promptOverride'>>) => {
@@ -177,11 +183,20 @@ export function Chat() {
 
     try {
       const systemPrompt = (promptOverride ?? settings.systemPrompt).trim();
+      const intelligentOptions =
+        settings.useHostedGateway && settings.useIntelligentMode
+          ? {
+              includeSessionMemory: settings.intelligentIncludeSessionMemory,
+              includeGlobalMemory: settings.intelligentIncludeGlobalMemory,
+              revealMemoryValues: settings.intelligentRevealMemoryUi,
+            }
+          : undefined;
       const generator = streamChatCompletions(
         currentMessages,
         systemPrompt || undefined,
         generatedSchema,
-        abortControllerRef.current.signal
+        abortControllerRef.current.signal,
+        intelligentOptions ?? null,
       );
 
       for await (const event of generator) {

@@ -77,7 +77,50 @@
 .composer-tools-row {
   display: flex;
   justify-content: flex-start;
+  align-items: center;
+  gap: 0.35rem;
   padding-left: 0.25rem;
+}
+
+.composer-mic-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: 0;
+  cursor: pointer;
+}
+
+.composer-mic-btn.active {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #ef4444;
+}
+
+.composer-mic-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.composer-intelligent-memory {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0 0.25rem 0.35rem;
+}
+
+.composer-intelligent-label {
+  font-weight: 500;
+  color: var(--text-tertiary);
 }
 
 .attach-btn {

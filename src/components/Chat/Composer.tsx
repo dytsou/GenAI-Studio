@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Square, Paperclip, X, Sparkles } from 'lucide-react';
+import { Send, Square, Paperclip, X, Sparkles, Mic } from 'lucide-react';
 import type { Attachment } from '../../stores/useChatStore';
 import type { QueuedSend } from './queuedSendTypes';
 import { ComposerQueuedList } from './ComposerQueuedList';
 import { processFile } from '../../utils/attachmentManager';
+import { useSettingsStore } from '../../stores/useSettingsStore';
+import { transcribeAudio } from '../../api/transcribe';
 import './Composer.css';
 
 interface ComposerProps {
@@ -28,11 +30,16 @@ export function Composer({
   onRemoveQueuedSend,
   onAppendAttachmentsToQueued,
 }: ComposerProps) {
+  const settings = useSettingsStore();
   const [content, setContent] = useState('');
   const [systemPromptOverride, setSystemPromptOverride] = useState('');
   const [isSystemOverrideEnabled, setIsSystemOverrideEnabled] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -42,6 +49,14 @@ export function Composer({
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [content]);
+
+  useEffect(() => {
+    return () => {
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== 'inactive') mr.stop();
+      mediaRecorderRef.current = null;
+    };
+  }, []);
 
   const handleSend = () => {
     if (!content.trim() && attachments.length === 0) return;
@@ -85,6 +100,51 @@ export function Composer({
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  const startRecording = async () => {
+    if (!settings.useHostedGateway || isGenerating) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      mr.start();
+      setIsRecording(true);
+    } catch (e) {
+      console.error(e);
+      alert('Microphone access failed.');
+    }
+  };
+
+  const finishRecordingAndTranscribe = async () => {
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    await new Promise<void>((resolve) => {
+      mr.addEventListener('stop', () => resolve(), { once: true });
+      if (mr.state !== 'inactive') mr.stop();
+    });
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    audioChunksRef.current = [];
+    if (blob.size < 100) return;
+    setIsTranscribing(true);
+    try {
+      const text = await transcribeAudio(blob);
+      setContent((prev) => (prev ? `${prev}\n${text}` : text));
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : 'Transcription failed');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <div className="composer-shell">
       <div className="composer-tools-row">
@@ -98,7 +158,52 @@ export function Composer({
         >
           <Sparkles size={14} />
         </button>
+        {settings.useHostedGateway && (
+          <button
+            type="button"
+            className={`composer-mic-btn ${isRecording ? 'active' : ''}`}
+            onClick={() => (isRecording ? void finishRecordingAndTranscribe() : void startRecording())}
+            disabled={isGenerating || isTranscribing || isProcessingFile}
+            title={isRecording ? 'Stop and transcribe' : 'Record voice (gateway)'}
+            aria-label="Voice transcription"
+          >
+            <Mic size={14} />
+          </button>
+        )}
       </div>
+      {settings.useHostedGateway && settings.useIntelligentMode && (
+        <div className="composer-intelligent-memory" aria-label="Intelligent memory tiers">
+          <span className="composer-intelligent-label">Memory:</span>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.intelligentIncludeSessionMemory}
+              onChange={(e) =>
+                settings.setSettings({ intelligentIncludeSessionMemory: e.target.checked })
+              }
+            />{' '}
+            Session
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.intelligentIncludeGlobalMemory}
+              onChange={(e) =>
+                settings.setSettings({ intelligentIncludeGlobalMemory: e.target.checked })
+              }
+            />{' '}
+            Global
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.intelligentRevealMemoryUi}
+              onChange={(e) => settings.setSettings({ intelligentRevealMemoryUi: e.target.checked })}
+            />{' '}
+            Reveal values
+          </label>
+        </div>
+      )}
       <div className="composer-container">
         <ComposerQueuedList
           items={sendQueue}
@@ -177,7 +282,11 @@ export function Composer({
             </button>
           </div>
         </div>
-        {isProcessingFile && <div className="processing-indicator">Processing attachments...</div>}
+        {(isProcessingFile || isTranscribing) && (
+          <div className="processing-indicator">
+            {isTranscribing ? 'Transcribing…' : 'Processing attachments...'}
+          </div>
+        )}
       </div>
       {isSystemOverrideEnabled && (
         <div className="composer-system-override-row">
