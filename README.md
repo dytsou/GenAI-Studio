@@ -4,6 +4,8 @@ A local-first AI chat workspace built with React + TypeScript + Vite.
 
 It supports streaming chat completions, multi-chat history, attachments (images/PDF), structured JSON output mode with schema editing, and GitHub Pages deployment through a single CI/CD workflow.
 
+**Architecture, deployment modes (diagram):** [docs/system-overview.md](docs/system-overview.md)
+
 ## How to configure (overview)
 
 Pick **one** path and follow its section:
@@ -41,6 +43,8 @@ Gateway-specific env vars live in **`deploy/.env.example`** (copy to **`deploy/.
 
 ## Tech Stack
 
+### SPA (`src/`)
+
 - React 19
 - TypeScript
 - Vite 8
@@ -48,10 +52,17 @@ Gateway-specific env vars live in **`deploy/.env.example`** (copy to **`deploy/.
 - Vitest
 - ESLint
 - pnpm
-- **react-markdown** + **remark-gfm** (message rendering)
-- **dompurify** (sanitized HTML in messages)
-- **pdfjs-dist** (PDF processing)
-- **lucide-react** (icons)
+- react-markdown + remark-gfm (message rendering)
+- dompurify (sanitized HTML in messages)
+- pdfjs-dist (PDF processing)
+- lucide-react (icons)
+
+### Hosted gateway (`deploy/gateway`, optional)
+
+- Node.js, TypeScript, Express, CORS, Multer
+- `pg` + Postgres (memory + embeddings)
+- Vitest + Supertest; `tsx` for gateway dev ([Hosted gateway (optional)](#hosted-gateway-optional))
+- Runs with Postgres via Docker Compose under `deploy/` ([deploy/README.md](deploy/README.md))
 
 ## Project Structure
 
