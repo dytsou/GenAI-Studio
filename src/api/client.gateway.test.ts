@@ -13,6 +13,7 @@ import { useSettingsStore } from "../stores/useSettingsStore";
 
 function gatewaySettings(overrides: Record<string, unknown> = {}) {
   return {
+    language: "en",
     apiKey: "sk-test",
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-4o-mini",

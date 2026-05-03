@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { mergeMaskedSettings } from './settingsMasking';
-import type { MaskedSettingsDraft, StoredSettings } from './settingsMasking';
+import { describe, it, expect } from "vitest";
+import { mergeMaskedSettings } from "./settingsMasking";
+import type { MaskedSettingsDraft, StoredSettings } from "./settingsMasking";
 
 const gwDefaults = {
-  gatewayBaseUrl: 'http://127.0.0.1:8080',
+  gatewayBaseUrl: "http://127.0.0.1:8080",
   useHostedGateway: false,
   useIntelligentMode: false,
   memoryEnabled: true,
@@ -15,55 +15,59 @@ const gwDefaults = {
 } as const;
 
 const storedBase: StoredSettings = {
-  apiKey: 'stored-key',
-  baseUrl: 'https://api.openai.com/v1',
-  model: 'gpt-4o',
+  language: "en",
+  apiKey: "stored-key",
+  baseUrl: "https://api.openai.com/v1",
+  model: "gpt-4o",
   temperature: 0.7,
   topP: 1,
   maxTokens: 4096,
   contextWindowTokens: 128000,
   includeStreamUsage: true,
-  systemPrompt: 'You are a helpful assistant.',
+  systemPrompt: "You are a helpful assistant.",
   ...gwDefaults,
 };
 
-const draftGw = (partial: Partial<MaskedSettingsDraft> = {}): MaskedSettingsDraft => ({
-  apiKey: '',
-  baseUrl: '',
-  model: '',
+const draftGw = (
+  partial: Partial<MaskedSettingsDraft> = {},
+): MaskedSettingsDraft => ({
+  apiKey: "",
+  baseUrl: "",
+  model: "",
   temperature: 0.2,
   topP: 0.8,
-  maxTokens: '',
-  contextWindowTokens: '',
+  maxTokens: "",
+  contextWindowTokens: "",
   includeStreamUsage: false,
-  systemPrompt: '',
-  gatewayBaseUrl: '',
+  systemPrompt: "",
+  gatewayBaseUrl: "",
   useHostedGateway: false,
   useIntelligentMode: false,
   memoryEnabled: true,
-  memoryTopK: '' as number | '',
+  memoryTopK: "" as number | "",
   toolsEnabled: false,
   intelligentIncludeSessionMemory: true,
   intelligentIncludeGlobalMemory: true,
   intelligentRevealMemoryUi: false,
   ...partial,
+  language: partial.language ?? "en",
 });
 
-describe('mergeMaskedSettings', () => {
-  it('emptyDraftKeepsStored', () => {
+describe("mergeMaskedSettings", () => {
+  it("emptyDraftKeepsStored", () => {
     const draft = draftGw({
-      apiKey: '',
-      baseUrl: '',
-      model: '',
+      apiKey: "",
+      baseUrl: "",
+      model: "",
     });
 
     const result = mergeMaskedSettings({ stored: storedBase, draft });
 
-    expect('merged' in result).toBe(true);
-    if ('merged' in result) {
+    expect("merged" in result).toBe(true);
+    if ("merged" in result) {
       expect(result.merged).toEqual({
         ...storedBase,
-        systemPrompt: '',
+        systemPrompt: "",
         temperature: draft.temperature,
         topP: draft.topP,
         includeStreamUsage: false,
@@ -71,18 +75,18 @@ describe('mergeMaskedSettings', () => {
     }
   });
 
-  it('draftOverridesStored', () => {
+  it("draftOverridesStored", () => {
     const draft = draftGw({
-      apiKey: 'draft-key',
-      baseUrl: 'https://example.com/v1',
-      model: 'llama-3',
+      apiKey: "draft-key",
+      baseUrl: "https://example.com/v1",
+      model: "llama-3",
       temperature: 0.1,
       topP: 0.9,
       maxTokens: 2048,
       contextWindowTokens: 262144,
       includeStreamUsage: false,
-      systemPrompt: 'Answer with bullet points.',
-      gatewayBaseUrl: 'http://gw.local:9999',
+      systemPrompt: "Answer with bullet points.",
+      gatewayBaseUrl: "http://gw.local:9999",
       useHostedGateway: true,
       useIntelligentMode: true,
       memoryTopK: 12,
@@ -92,21 +96,21 @@ describe('mergeMaskedSettings', () => {
 
     const result = mergeMaskedSettings({ stored: storedBase, draft });
 
-    expect('merged' in result).toBe(true);
-    if ('merged' in result) {
-      expect(result.merged.apiKey).toBe('draft-key');
-      expect(result.merged.gatewayBaseUrl).toBe('http://gw.local:9999');
+    expect("merged" in result).toBe(true);
+    if ("merged" in result) {
+      expect(result.merged.apiKey).toBe("draft-key");
+      expect(result.merged.gatewayBaseUrl).toBe("http://gw.local:9999");
       expect(result.merged.memoryTopK).toBe(12);
       expect(result.merged.useHostedGateway).toBe(true);
       expect(result.merged.useIntelligentMode).toBe(true);
     }
   });
 
-  it('intelligentModeOffWhenGatewayOff', () => {
+  it("intelligentModeOffWhenGatewayOff", () => {
     const draft = draftGw({
-      apiKey: 'k',
-      baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o',
+      apiKey: "k",
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o",
       useHostedGateway: false,
       useIntelligentMode: true,
       maxTokens: 100,
@@ -114,18 +118,18 @@ describe('mergeMaskedSettings', () => {
     });
 
     const result = mergeMaskedSettings({ stored: storedBase, draft });
-    expect('merged' in result).toBe(true);
-    if ('merged' in result) {
+    expect("merged" in result).toBe(true);
+    if ("merged" in result) {
       expect(result.merged.useIntelligentMode).toBe(false);
     }
   });
 
-  it('missingApiKeyErrors', () => {
-    const stored: StoredSettings = { ...storedBase, apiKey: '' };
+  it("missingApiKeyErrors", () => {
+    const stored: StoredSettings = { ...storedBase, apiKey: "" };
     const draft = draftGw({
-      apiKey: '',
-      baseUrl: '',
-      model: '',
+      apiKey: "",
+      baseUrl: "",
+      model: "",
       temperature: 0.7,
       topP: 1,
       includeStreamUsage: true,
@@ -133,9 +137,9 @@ describe('mergeMaskedSettings', () => {
 
     const result = mergeMaskedSettings({ stored, draft });
 
-    expect('error' in result).toBe(true);
-    if ('error' in result) {
-      expect(result.error).toBe('Please enter an API Key.');
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error).toBe("Please enter an API Key.");
     }
   });
 });

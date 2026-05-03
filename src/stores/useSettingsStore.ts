@@ -49,11 +49,8 @@ interface SettingsState {
   setSchemaFields: (fields: SchemaField[]) => void;
 }
 
-export const useSettingsStore = create<
-  SettingsState,
-  [["zustand/persist", SettingsState]]
->()(
-  persist<SettingsState>(
+export const useSettingsStore = create<SettingsState>()(
+  persist(
     (set) => ({
       language: "en",
       apiKey: "",
