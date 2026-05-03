@@ -1,5 +1,9 @@
 # GenAI Studio
 
+[![GenAI Studio version](https://img.shields.io/github/package-json/v/dytsou/GenAI-Studio?label=genai-studio&logo=npm)](https://github.com/dytsou/GenAI-Studio/blob/main/package.json)
+[![CI](https://github.com/dytsou/GenAI-Studio/actions/workflows/ci.yml/badge.svg)](https://github.com/dytsou/GenAI-Studio/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/dytsou/GenAI-Studio?label=license)](https://github.com/dytsou/GenAI-Studio/blob/main/LICENSE)
+
 A local-first AI chat workspace built with React + TypeScript + Vite.
 
 It supports streaming chat completions, multi-chat history, attachments (images/PDF), structured JSON output mode with schema editing, and GitHub Pages deployment through a single CI/CD workflow.
