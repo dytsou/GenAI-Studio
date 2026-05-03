@@ -34,6 +34,7 @@ export function Chat() {
     studioMemoryTokensUsed?: number | null;
   } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [queueChatKey, setQueueChatKey] = useState(activeChatId);
   const [sendQueue, setSendQueue] = useState<QueuedSend[]>([]);
   const sendQueueRef = useRef<QueuedSend[]>([]);
 
@@ -41,10 +42,11 @@ export function Chat() {
     sendQueueRef.current = sendQueue;
   }, [sendQueue]);
 
-  useEffect(() => {
-    // Outbound queue is per-thread; discard when switching active chat.
+  // Outbound queue is per-thread; discard when switching active chat (prefer render-phase reset over effect-setState).
+  if (activeChatId !== queueChatKey) {
+    setQueueChatKey(activeChatId);
     setSendQueue([]);
-  }, [activeChatId]);
+  }
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 

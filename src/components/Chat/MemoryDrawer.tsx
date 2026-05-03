@@ -73,39 +73,71 @@ export function MemoryDrawer(props: {
 
   useEffect(() => {
     if (!open) return;
-    setLoadingRecent(true);
-    setRecentError(null);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoadingRecent(true);
+      setRecentError(null);
+    });
     void fetchMemoryRecent({ limit: 12 })
-      .then((r) => setRecent(r.chunks ?? []))
+      .then((r) => {
+        if (cancelled) return;
+        setRecent(r.chunks ?? []);
+      })
       .catch((e: unknown) => {
+        if (cancelled) return;
         setRecentError(e instanceof Error ? e.message : t('memoryDrawer.failedToLoadRecent'));
       })
-      .finally(() => setLoadingRecent(false));
-  }, [open]);
+      .finally(() => {
+        setLoadingRecent(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, t]);
 
   useEffect(() => {
     if (!open) return;
     if (!debouncedDraft) {
-      setCandidates([]);
-      setDraftHash(undefined);
-      setCandidateError(null);
-      return;
+      abortRef.current?.abort();
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setCandidates([]);
+        setDraftHash(undefined);
+        setCandidateError(null);
+        setLoadingCandidates(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
-    setLoadingCandidates(true);
-    setCandidateError(null);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoadingCandidates(true);
+      setCandidateError(null);
+    });
     void fetchMemoryCandidates({ draftText: debouncedDraft, signal: ac.signal })
       .then((r) => {
+        if (cancelled) return;
         setCandidates(r.candidates ?? []);
         setDraftHash(r.draft_hash || undefined);
       })
       .catch((e: unknown) => {
+        if (cancelled) return;
         setCandidateError(e instanceof Error ? e.message : t('memoryDrawer.failedToLoadCandidates'));
       })
-      .finally(() => setLoadingCandidates(false));
-  }, [open, debouncedDraft]);
+      .finally(() => {
+        setLoadingCandidates(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, debouncedDraft, t]);
 
   const runSearch = async () => {
     const q = query.trim();
