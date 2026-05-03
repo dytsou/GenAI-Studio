@@ -15,11 +15,43 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   width: 90%;
-  max-width: 500px;
+  max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
   animation: slideUp var(--transition-normal);
+}
+
+.settings-fieldset {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.settings-fieldset legend {
+  padding: 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.settings-subfieldset {
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.settings-subfieldset legend {
+  font-size: 0.75rem;
+}
+
+.settings-subfieldset.disabled,
+.form-group.disabled,
+.form-checkbox-row.disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 .modal-header {

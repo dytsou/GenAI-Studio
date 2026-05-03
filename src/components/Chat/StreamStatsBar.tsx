@@ -1,4 +1,5 @@
 import './StreamStatsBar.css';
+import { useTranslation } from 'react-i18next';
 
 export type StreamStatsBarProps = {
   promptTokens: number;
@@ -7,6 +8,9 @@ export type StreamStatsBarProps = {
   maxOutputTokens: number;
   tokensPerSecond: number | null;
   active: boolean;
+  /** Last `studio_meta` from hosted gateway SSE (Intelligent routing), if any. */
+  studioChosenModel?: string | null;
+  studioMemoryTokensUsed?: number | null;
 };
 
 function formatPercent(used: number, cap: number): string {
@@ -28,25 +32,32 @@ export function StreamStatsBar({
   maxOutputTokens,
   tokensPerSecond,
   active,
+  studioChosenModel,
+  studioMemoryTokensUsed,
 }: StreamStatsBarProps) {
+  const { t } = useTranslation();
   const tpsLabel =
     tokensPerSecond != null && Number.isFinite(tokensPerSecond) ? `${tokensPerSecond.toFixed(1)} t/s` : '—';
+
+  const showStudioMeta =
+    (studioChosenModel != null && studioChosenModel !== '') ||
+    (studioMemoryTokensUsed != null && Number.isFinite(studioMemoryTokensUsed));
 
   return (
     <div
       className={`stream-stats-bar ${active ? 'stream-stats-bar--active' : ''}`}
       aria-live="polite"
-      aria-label="Streaming token statistics"
+      aria-label={t('streamStats.ariaLabel')}
     >
       <span className="stream-stats-item">
-        <span className="stream-stats-label">Context:</span>{' '}
+        <span className="stream-stats-label">{t('streamStats.context')}</span>{' '}
         <span className="stream-stats-value">
           {Math.round(promptTokens)}/{contextWindowTokens} ({formatPercent(promptTokens, contextWindowTokens)})
         </span>
       </span>
       <span className="stream-stats-sep" aria-hidden />
       <span className="stream-stats-item">
-        <span className="stream-stats-label">Output:</span>{' '}
+        <span className="stream-stats-label">{t('streamStats.output')}</span>{' '}
         <span className="stream-stats-value">
           {Math.round(completionTokens)}/{formatOutputCap(maxOutputTokens)}
         </span>
@@ -55,6 +66,23 @@ export function StreamStatsBar({
       <span className="stream-stats-item">
         <span className="stream-stats-value stream-stats-tps">{tpsLabel}</span>
       </span>
+      {showStudioMeta ? (
+        <>
+          <span className="stream-stats-sep" aria-hidden />
+          {studioChosenModel ? (
+            <span className="stream-stats-item" title={t('streamStats.modelReportedByGateway')}>
+              <span className="stream-stats-label">{t('streamStats.gateway')}</span>{' '}
+              <span className="stream-stats-value">{studioChosenModel}</span>
+            </span>
+          ) : null}
+          {studioMemoryTokensUsed != null && Number.isFinite(studioMemoryTokensUsed) ? (
+            <span className="stream-stats-item" title={t('streamStats.memoryTokensUsed')}>
+              <span className="stream-stats-label">{t('streamStats.memoryShort')}</span>{' '}
+              <span className="stream-stats-value">{Math.round(studioMemoryTokensUsed)}</span>
+            </span>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import DOMPurify from 'dompurify';
 import type { Message } from '../../stores/useChatStore';
 import { Bot, User, RefreshCw, Check, X, Edit2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import './MessageRenderer.css';
 
 interface MessageRendererProps {
@@ -13,8 +14,10 @@ interface MessageRendererProps {
 }
 
 export const MessageRenderer = memo(function MessageRenderer({ message, onRegenerate, onEdit }: MessageRendererProps) {
+  const { t } = useTranslation();
   const isUser = message.role === 'user';
   const cleanContent = DOMPurify.sanitize(message.content);
+  const mem = message.memoryInjection;
   
   const [isEditing, setIsEditing] = useState(false);
   const [draftContent, setDraftContent] = useState(message.content);
@@ -51,8 +54,8 @@ export const MessageRenderer = memo(function MessageRenderer({ message, onRegene
                rows={Math.max(3, draftContent.split('\n').length)}
              />
              <div className="edit-actions">
-               <button onClick={() => setIsEditing(false)} className="cancel-edit-btn"><X size={16}/> Cancel</button>
-               <button onClick={handleSaveEdit} className="save-edit-btn"><Check size={16}/> Save & Resend</button>
+               <button onClick={() => setIsEditing(false)} className="cancel-edit-btn"><X size={16}/> {t('message.cancel')}</button>
+               <button onClick={handleSaveEdit} className="save-edit-btn"><Check size={16}/> {t('message.saveResend')}</button>
              </div>
            </div>
         ) : (
@@ -65,18 +68,54 @@ export const MessageRenderer = memo(function MessageRenderer({ message, onRegene
         
         {message.error && (
           <div className="message-error">
-            An error occurred while generating this response.
+            {t('message.errorOccurred')}
           </div>
         )}
 
+        {!isUser && mem ? (
+          <details className="message-memory-used">
+            <summary>
+              {t('message.memoryUsed')}: <strong>{mem.mode}</strong> ·{' '}
+              <strong>{mem.chunkIdsInjected.length}</strong> chunks
+              {mem.memoryTokensEstimate != null ? ` · ~${Math.round(mem.memoryTokensEstimate)} tok` : ''}
+            </summary>
+            <div className="message-memory-used-body">
+              {Array.isArray(mem.chunksInjected) && mem.chunksInjected.length ? (
+                <div className="message-memory-used-chips">
+                  {mem.chunksInjected.flatMap((c) =>
+                    (c.keyphrases ?? []).length
+                      ? (c.keyphrases ?? []).slice(0, 12).map((k) => (
+                          <span key={`${c.chunk_id}:${k}`} className="message-memory-chip">
+                            {k}
+                          </span>
+                        ))
+                      : [
+                          <span
+                            key={`${c.chunk_id}:none`}
+                            className="message-memory-chip empty"
+                          >
+                            {c.preview}
+                          </span>,
+                        ],
+                  )}
+                </div>
+              ) : (
+                <div className="message-memory-used-ids">
+                  {mem.chunkIdsInjected.length ? mem.chunkIdsInjected.join(', ') : '(none)'}
+                </div>
+              )}
+            </div>
+          </details>
+        ) : null}
+
         <div className="message-actions">
            {!isUser && onRegenerate && (
-              <button className="action-btn" onClick={onRegenerate} title="Regenerate response">
+              <button className="action-btn" onClick={onRegenerate} title={t('message.regenerate')}>
                 <RefreshCw size={14} />
               </button>
            )}
            {isUser && onEdit && !isEditing && (
-              <button className="action-btn" onClick={() => setIsEditing(true)} title="Edit message">
+              <button className="action-btn" onClick={() => setIsEditing(true)} title={t('message.edit')}>
                 <Edit2 size={14} />
               </button>
            )}

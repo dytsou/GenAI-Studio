@@ -7,15 +7,18 @@ import { MessageRenderer } from './MessageRenderer';
 import { Composer } from './Composer';
 import { SchemaWorkspace } from '../StructuredOutput/SchemaWorkspace';
 import { streamChatCompletions } from '../../api/client';
+import { fetchMemoryRecent } from '../../api/memory';
 import { estimatePromptTokens, estimateTokensFromChars } from '../../utils/tokenEstimate';
 import { StreamStatsBar } from './StreamStatsBar';
 import { ToggleRight, ToggleLeft } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type { QueuedSend } from './queuedSendTypes';
 import { popFirstSendable } from './queueUtils';
+import { useTranslation } from 'react-i18next';
 import './Chat.css';
 
 export function Chat() {
+  const { t } = useTranslation();
   const { chats, activeChatId, addMessage, updateMessage, deleteMessageAndSubsequent, deleteLastMessage } = useChatStore();
   const settings = useSettingsStore();
 
@@ -27,16 +30,25 @@ export function Chat() {
     promptTokens: number;
     completionTokens: number;
     tokensPerSecond: number | null;
+    studioChosenModel?: string | null;
+    studioMemoryTokensUsed?: number | null;
   } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [queueChatKey, setQueueChatKey] = useState(activeChatId);
   const [sendQueue, setSendQueue] = useState<QueuedSend[]>([]);
   const sendQueueRef = useRef<QueuedSend[]>([]);
-  sendQueueRef.current = sendQueue;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    sendQueueRef.current = sendQueue;
+  }, [sendQueue]);
+
+  // Outbound queue is per-thread; discard when switching active chat (prefer render-phase reset over effect-setState).
+  if (activeChatId !== queueChatKey) {
+    setQueueChatKey(activeChatId);
     setSendQueue([]);
-  }, [activeChatId]);
+  }
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const updateQueuedSend = useCallback(
     (id: string, patch: Partial<Pick<QueuedSend, 'content' | 'attachments' | 'promptOverride'>>) => {
@@ -105,7 +117,12 @@ export function Chat() {
     };
   }, [settings.structuredOutputMode, settings.schemaFields]);
 
-  const handleSend = async (content: string, attachments: Attachment[], promptOverride?: string) => {
+  const handleSend = async (
+    content: string,
+    attachments: Attachment[],
+    promptOverride?: string,
+    memoryOverride?: { includeChunkIds: string[]; excludeChunkIds: string[]; draftHash?: string } | null,
+  ) => {
     if (!activeChatId) return;
 
     if (isGenerating) {
@@ -122,7 +139,7 @@ export function Chat() {
       attachments
     });
 
-    await handleGenerate(promptOverride, activeChatId);
+    await handleGenerate(promptOverride, activeChatId, memoryOverride ?? null);
   };
 
   const handleRegenerate = async () => {
@@ -140,7 +157,11 @@ export function Chat() {
      await handleGenerate(undefined, activeChatId);
   };
 
-  const handleGenerate = async (promptOverride?: string, explicitChatId?: string) => {
+  const handleGenerate = async (
+    promptOverride?: string,
+    explicitChatId?: string,
+    memoryOverride?: { includeChunkIds: string[]; excludeChunkIds: string[]; draftHash?: string } | null,
+  ) => {
     const chatIdForRun = explicitChatId ?? activeChatId;
     if (!chatIdForRun) return;
 
@@ -168,20 +189,36 @@ export function Chat() {
       promptTokens: promptEstimate,
       completionTokens: 0,
       tokensPerSecond: null,
+      studioChosenModel: null,
+      studioMemoryTokensUsed: null,
     });
 
     let receivedUsage = false;
     let aborted = false;
     let firstTokenMs: number | null = null;
     let fullContent = '';
+    const shouldRefreshMemory =
+      settings.useHostedGateway &&
+      settings.useIntelligentMode &&
+      settings.memoryEnabled;
 
     try {
       const systemPrompt = (promptOverride ?? settings.systemPrompt).trim();
+      const intelligentOptions =
+        settings.useHostedGateway && settings.useIntelligentMode
+          ? {
+              includeSessionMemory: settings.intelligentIncludeSessionMemory,
+              includeGlobalMemory: settings.intelligentIncludeGlobalMemory,
+              revealMemoryValues: settings.intelligentRevealMemoryUi,
+              memoryOverride: memoryOverride ?? null,
+            }
+          : undefined;
       const generator = streamChatCompletions(
         currentMessages,
         systemPrompt || undefined,
         generatedSchema,
-        abortControllerRef.current.signal
+        abortControllerRef.current.signal,
+        intelligentOptions ?? null,
       );
 
       for await (const event of generator) {
@@ -197,6 +234,8 @@ export function Chat() {
             promptTokens: prev?.promptTokens ?? promptEstimate,
             completionTokens: completionEstimate,
             tokensPerSecond: tps,
+            studioChosenModel: prev?.studioChosenModel ?? null,
+            studioMemoryTokensUsed: prev?.studioMemoryTokensUsed ?? null,
           }));
         } else if (event.type === 'usage') {
           receivedUsage = true;
@@ -205,7 +244,34 @@ export function Chat() {
             promptTokens: u.prompt_tokens ?? prev?.promptTokens ?? promptEstimate,
             completionTokens: u.completion_tokens ?? prev?.completionTokens ?? 0,
             tokensPerSecond: prev?.tokensPerSecond ?? null,
+            studioChosenModel: prev?.studioChosenModel ?? null,
+            studioMemoryTokensUsed: prev?.studioMemoryTokensUsed ?? null,
           }));
+        } else if (event.type === 'studio_meta') {
+          const m = event.meta;
+          setStreamStats((prev) => ({
+            promptTokens: prev?.promptTokens ?? promptEstimate,
+            completionTokens: prev?.completionTokens ?? 0,
+            tokensPerSecond: prev?.tokensPerSecond ?? null,
+            studioChosenModel: m.chosen_model ?? prev?.studioChosenModel ?? null,
+            studioMemoryTokensUsed:
+              m.memory_tokens_used ?? prev?.studioMemoryTokensUsed ?? null,
+          }));
+        } else if (event.type === 'studio_memory_injection') {
+          const mem = event.memory;
+          const chunksInjectedRaw =
+            typeof mem === 'object' && mem !== null
+              ? (mem as Record<string, unknown>).chunks_injected
+              : undefined;
+          updateMessage(chatIdForRun, lastMsg.id, {
+            memoryInjection: {
+              mode: mem.mode,
+              chunkIdsInjected: Array.isArray(mem.chunk_ids_injected) ? mem.chunk_ids_injected : [],
+              chunksInjected: Array.isArray(chunksInjectedRaw) ? chunksInjectedRaw : undefined,
+              memoryTokensEstimate:
+                typeof mem.memory_tokens_estimate === 'number' ? mem.memory_tokens_estimate : null,
+            },
+          });
         }
       }
     } catch (err: unknown) {
@@ -227,11 +293,51 @@ export function Chat() {
             promptTokens: prev.promptTokens,
             completionTokens: completion,
             tokensPerSecond: tps,
+            studioChosenModel: prev.studioChosenModel,
+            studioMemoryTokensUsed: prev.studioMemoryTokensUsed,
           };
         });
       }
       setIsGenerating(false);
       abortControllerRef.current = null;
+
+      if (!aborted && shouldRefreshMemory) {
+        updateMessage(chatIdForRun, lastMsg.id, {
+          recentMemory: {
+            status: 'saving',
+            chunks: [
+              {
+                chunk_id: 'pending',
+                created_at: new Date().toISOString(),
+                preview: fullContent.slice(0, 240),
+                tags: [],
+              },
+            ],
+          },
+        });
+
+        void fetchMemoryRecent({ limit: 12 })
+          .then((r) => {
+            updateMessage(chatIdForRun, lastMsg.id, {
+              recentMemory: { status: 'reconciled', chunks: r.chunks ?? [] },
+            });
+          })
+          .catch(() => {
+            updateMessage(chatIdForRun, lastMsg.id, {
+              recentMemory: {
+                status: 'error',
+                chunks: [
+                  {
+                    chunk_id: 'pending',
+                    created_at: new Date().toISOString(),
+                    preview: fullContent.slice(0, 240),
+                    tags: [],
+                  },
+                ],
+              },
+            });
+          });
+      }
 
       if (!aborted) {
         const { msg, rest } = popFirstSendable(sendQueueRef.current);
@@ -261,7 +367,7 @@ export function Chat() {
   if (!activeChat) {
     return (
       <div className="chat-empty-state">
-        <p>Select or create a chat to begin.</p>
+        <p>{t('chat.emptySelectOrCreate')}</p>
       </div>
     );
   }
@@ -282,14 +388,14 @@ export function Chat() {
              onClick={() => settings.setSettings({ structuredOutputMode: !settings.structuredOutputMode })}
            >
              {settings.structuredOutputMode ? <ToggleRight size={20} className="active-toggle" /> : <ToggleLeft size={20} />}
-             <span>Structured Output</span>
+             <span>{t('chat.structuredOutput')}</span>
            </button>
         </div>
 
         <div className="chat-messages-area">
           {messages.length === 0 ? (
             <div className="chat-welcome">
-              <h2>How can I help you today?</h2>
+              <h2>{t('chat.welcome')}</h2>
             </div>
           ) : (
             <div className="messages-list">
@@ -314,6 +420,8 @@ export function Chat() {
               maxOutputTokens={settings.maxTokens}
               tokensPerSecond={streamStats.tokensPerSecond}
               active={isGenerating}
+              studioChosenModel={streamStats.studioChosenModel}
+              studioMemoryTokensUsed={streamStats.studioMemoryTokensUsed}
             />
           )}
           <Composer

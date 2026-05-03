@@ -1,14 +1,19 @@
-import { useSettingsStore } from '../stores/useSettingsStore';
-import type { Message } from '../stores/useChatStore';
+import { useSettingsStore } from "../stores/useSettingsStore";
+import type { Message } from "../stores/useChatStore";
+import type { ChatStreamUsage } from "./streamTypes";
+import { readSseStream } from "./sseStudioEvents";
+import { getOrCreateWorkspaceId } from "./gatewayWorkspaceId";
+
+export type { ChatStreamUsage } from "./streamTypes";
 
 type ResponseFormat = Record<string, unknown>;
 
-type TextContentPart = { type: 'text'; text: string };
-type ImageUrlContentPart = { type: 'image_url'; image_url: { url: string } };
+type TextContentPart = { type: "text"; text: string };
+type ImageUrlContentPart = { type: "image_url"; image_url: { url: string } };
 type ChatContentPart = TextContentPart | ImageUrlContentPart;
 
 type ChatCompletionMessage = {
-  role: Message['role'];
+  role: Message["role"];
   content: string | ChatContentPart[];
 };
 
@@ -23,22 +28,140 @@ type ChatCompletionRequestPayload = {
   stream_options?: { include_usage: boolean };
 };
 
-export type ChatStreamUsage = {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-};
+function normalizeMaxTokensForUpstream(params: {
+  baseUrl: string;
+  payload: Record<string, unknown>;
+}) {
+  // Some OpenAI models reject `max_tokens` and require `max_completion_tokens`.
+  // Keep this rewrite local to OpenAI to avoid breaking other OpenAI-compatible providers.
+  let host = "";
+  try {
+    host = new URL(params.baseUrl).host.toLowerCase();
+  } catch {
+    host = "";
+  }
+  if (host !== "api.openai.com") return;
+
+  const maxTokens = params.payload.max_tokens;
+  const already = params.payload.max_completion_tokens;
+  if (already !== undefined) return;
+  if (typeof maxTokens !== "number" || !Number.isFinite(maxTokens)) return;
+
+  params.payload.max_completion_tokens = maxTokens;
+  delete params.payload.max_tokens;
+}
 
 export type ChatStreamEvent =
-  | { type: 'content'; text: string }
-  | { type: 'usage'; usage: ChatStreamUsage };
+  | { type: "content"; text: string }
+  | { type: "usage"; usage: ChatStreamUsage }
+  | {
+      type: "studio_meta";
+      meta: {
+        kind: "meta";
+        chosen_model?: string;
+        memory_tokens_used?: number;
+      };
+    }
+  | {
+      type: "studio_tool";
+      tool: {
+        kind: "tool";
+        id: string;
+        name: string;
+        phase: "start" | "end" | "error";
+        ok?: boolean;
+        detail?: string;
+      };
+    }
+  | {
+      type: "studio_memory_injection";
+      memory: {
+        kind: "memory_injection";
+        mode: "disabled" | "auto" | "manual";
+        chunk_ids_injected: string[];
+        memory_tokens_estimate?: number;
+      };
+    }
+  | {
+      type: "studio_memory_save_enqueued";
+      memory: {
+        kind: "memory_save_enqueued";
+      };
+    };
+
+export interface IntelligentSendOptions {
+  includeSessionMemory: boolean;
+  includeGlobalMemory: boolean;
+  revealMemoryValues: boolean;
+  memoryOverride?: {
+    includeChunkIds?: string[];
+    excludeChunkIds?: string[];
+    draftHash?: string;
+  } | null;
+}
+
+function clampMemoryTopK(n: number): number {
+  const x = Number.isFinite(n) ? Math.floor(n) : 8;
+  return Math.min(16, Math.max(1, x));
+}
+
+async function fetchWithBusyRetry(
+  execute: () => Promise<Response>,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const maxAttempts = 6;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const res = await execute();
+    if (res.status !== 409) return res;
+    let waitMs = Number(res.headers.get("retry-after")) * 1000;
+    if (!Number.isFinite(waitMs) || waitMs < 0) waitMs = 2000;
+    waitMs = Math.min(waitMs, 8000);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
+  const res = await execute();
+  if (res.status === 409) {
+    await res.body?.cancel();
+    throw new Error("workspace_busy — max retries exceeded");
+  }
+  return res;
+}
+
+export function buildCompletionMessages(
+  messages: Omit<Message, "id">[],
+  systemPrompt?: string,
+): ChatCompletionMessage[] {
+  const apiMessages: ChatCompletionMessage[] = [];
+  if (systemPrompt) {
+    apiMessages.push({ role: "system", content: systemPrompt });
+  }
+  for (const msg of messages) {
+    if (msg.attachments && msg.attachments.length > 0) {
+      const contentParts: ChatContentPart[] = [
+        { type: "text", text: msg.content },
+      ];
+      for (const att of msg.attachments) {
+        contentParts.push({
+          type: "image_url",
+          image_url: { url: att.dataUrl },
+        });
+      }
+      apiMessages.push({ role: msg.role, content: contentParts });
+    } else {
+      apiMessages.push({ role: msg.role, content: msg.content });
+    }
+  }
+  return apiMessages;
+}
 
 export async function* streamChatCompletions(
-  messages: Omit<Message, 'id'>[],
+  messages: Omit<Message, "id">[],
   systemPrompt?: string,
   responseFormat?: ResponseFormat,
   abortSignal?: AbortSignal,
+  intelligentOptions?: IntelligentSendOptions | null,
 ): AsyncGenerator<ChatStreamEvent, void, undefined> {
+  const s = useSettingsStore.getState();
   const {
     apiKey,
     baseUrl,
@@ -47,34 +170,22 @@ export async function* streamChatCompletions(
     topP,
     maxTokens,
     includeStreamUsage,
-  } = useSettingsStore.getState();
+    useHostedGateway,
+    gatewayBaseUrl,
+    useIntelligentMode,
+    memoryEnabled,
+    memoryTopK,
+    toolsEnabled,
+  } = s;
 
   if (!apiKey) {
-    throw new Error('API Key is not configured. Please set it in Settings.');
+    throw new Error("API Key is not configured. Please set it in Settings.");
   }
 
-  const apiMessages: ChatCompletionMessage[] = [];
-
-  if (systemPrompt) {
-    apiMessages.push({ role: 'system', content: systemPrompt });
-  }
-
-  for (const msg of messages) {
-    if (msg.attachments && msg.attachments.length > 0) {
-      const contentParts: ChatContentPart[] = [{ type: 'text', text: msg.content }];
-
-      for (const att of msg.attachments) {
-        contentParts.push({
-          type: 'image_url',
-          image_url: { url: att.dataUrl },
-        });
-      }
-
-      apiMessages.push({ role: msg.role, content: contentParts });
-    } else {
-      apiMessages.push({ role: msg.role, content: msg.content });
-    }
-  }
+  const apiMessages = buildCompletionMessages(
+    messages,
+    systemPrompt?.trim() || undefined,
+  );
 
   const payload: ChatCompletionRequestPayload = {
     model,
@@ -88,81 +199,114 @@ export async function* streamChatCompletions(
   if (includeStreamUsage) {
     payload.stream_options = { include_usage: true };
   }
-
   if (responseFormat) {
     payload.response_format = responseFormat;
   }
 
-  const completeBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-  const url = completeBaseUrl.endsWith('/chat/completions') ? completeBaseUrl : `${completeBaseUrl}/chat/completions`;
+  let url: string;
+  let headers: Record<string, string>;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const signal = abortSignal;
+
+  if (useHostedGateway) {
+    const gw = (gatewayBaseUrl || "http://127.0.0.1:8080").replace(/\/$/, "");
+    const path = useIntelligentMode ? "/v1/intelligent/chat" : "/v1/chat";
+    url = `${gw}${path}`;
+    const workspaceId = getOrCreateWorkspaceId();
+    headers = {
+      "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(payload),
-    signal: abortSignal,
+      "X-Upstream-Base-Url": baseUrl.endsWith("/")
+        ? baseUrl.slice(0, -1)
+        : baseUrl,
+      "X-Workspace-Id": workspaceId,
+      "X-Memory-Enabled": memoryEnabled ? "true" : "false",
+      "X-Memory-Top-K": String(clampMemoryTopK(memoryTopK)),
+      "X-Tools-Enabled": toolsEnabled ? "true" : "false",
+    };
+    if (useIntelligentMode) {
+      const io = intelligentOptions ?? {
+        includeSessionMemory: true,
+        includeGlobalMemory: true,
+        revealMemoryValues: false,
+        memoryOverride: null,
+      };
+      headers["X-Studio-Intelligent-Session-Memory"] = io.includeSessionMemory
+        ? "true"
+        : "false";
+      headers["X-Studio-Intelligent-Global-Memory"] = io.includeGlobalMemory
+        ? "true"
+        : "false";
+      headers["X-Studio-Intelligent-Reveal-Memory"] = io.revealMemoryValues
+        ? "true"
+        : "false";
+
+      if (
+        io.memoryOverride &&
+        (io.memoryOverride.includeChunkIds?.length ||
+          io.memoryOverride.excludeChunkIds?.length)
+      ) {
+        (payload as Record<string, unknown>).memory_override = {
+          include_chunk_ids: io.memoryOverride.includeChunkIds ?? [],
+          exclude_chunk_ids: io.memoryOverride.excludeChunkIds ?? [],
+          draft_hash: io.memoryOverride.draftHash,
+        };
+      }
+    }
+  } else {
+    const completeBaseUrl = baseUrl.endsWith("/")
+      ? baseUrl.slice(0, -1)
+      : baseUrl;
+    url = completeBaseUrl.endsWith("/chat/completions")
+      ? completeBaseUrl
+      : `${completeBaseUrl}/chat/completions`;
+    headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+  }
+
+  normalizeMaxTokensForUpstream({
+    baseUrl,
+    payload: payload as unknown as Record<string, unknown>,
   });
+
+  const response = await fetchWithBusyRetry(
+    () =>
+      fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal,
+      }),
+    signal,
+  );
 
   if (!response.ok) {
     let errorText = await response.text();
     try {
-      const parsed = JSON.parse(errorText);
+      const parsed = JSON.parse(errorText) as { error?: { message?: string } };
       errorText = parsed.error?.message || errorText;
-    } catch (e) {
-      console.error(e);
+    } catch {
+      /* ignore */
     }
     throw new Error(`API Error: ${response.status} - ${errorText}`);
   }
 
   if (!response.body) {
-    throw new Error('No streaming body returned from API.');
+    throw new Error("No streaming body returned from API.");
   }
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const chunks = buffer.split('\n');
-    buffer = chunks.pop() || '';
-
-    for (const chunk of chunks) {
-      const trimmed = chunk.trim();
-      if (!trimmed || trimmed === 'data: [DONE]') continue;
-
-      if (trimmed.startsWith('data: ')) {
-        const dataStr = trimmed.slice(6);
-        try {
-          const parsed = JSON.parse(dataStr) as {
-            choices?: Array<{ delta?: { content?: string } }>;
-            usage?: ChatStreamUsage;
-          };
-
-          if (
-            parsed.usage &&
-            (parsed.usage.prompt_tokens != null ||
-              parsed.usage.completion_tokens != null ||
-              parsed.usage.total_tokens != null)
-          ) {
-            yield { type: 'usage', usage: parsed.usage };
-          }
-
-          const deltaContent = parsed.choices?.[0]?.delta?.content;
-          if (typeof deltaContent === 'string' && deltaContent.length > 0) {
-            yield { type: 'content', text: deltaContent };
-          }
-        } catch (e) {
-          console.error(e);
-          console.warn('Failed to parse stream chunk:', dataStr);
-        }
-      }
+  for await (const event of readSseStream(response.body)) {
+    if (
+      event.type === "studio_meta" ||
+      event.type === "studio_tool" ||
+      event.type === "studio_memory_injection" ||
+      event.type === "studio_memory_save_enqueued" ||
+      event.type === "usage" ||
+      event.type === "content"
+    ) {
+      yield event;
     }
   }
 }

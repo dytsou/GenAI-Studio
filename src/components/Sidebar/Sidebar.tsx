@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { MessageSquarePlus, MessageSquare, Settings, Trash2, Menu, X } from 'lucide-react';
 import { useChatStore } from '../../stores/useChatStore';
+import { useTranslation } from 'react-i18next';
 import './Sidebar.css';
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const { chats, activeChatId, createChat, setActiveChat, deleteChat } = useChatStore();
   const [isOpen, setIsOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
@@ -38,7 +40,7 @@ export function Sidebar() {
       <button 
         className={`sidebar-toggle ${isOpen ? 'open' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
-        aria-label="Toggle Sidebar"
+        aria-label={t('sidebar.toggle')}
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
@@ -49,7 +51,7 @@ export function Sidebar() {
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={handleNewChat}>
             <MessageSquarePlus size={20} />
-            <span>New chat</span>
+            <span>{t('sidebar.newChat')}</span>
           </button>
         </div>
 
@@ -59,16 +61,16 @@ export function Sidebar() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search chats..."
-            aria-label="Search chat history"
+            placeholder={t('sidebar.searchPlaceholder')}
+            aria-label={t('sidebar.searchAriaLabel')}
           />
 
           {chats.length === 0 ? (
-            <div className="empty-chats">No chats yet</div>
+            <div className="empty-chats">{t('sidebar.emptyNoChats')}</div>
           ) : (
             <>
               {visibleChats.length === 0 ? (
-                <div className="empty-chats">No chats match your search</div>
+                <div className="empty-chats">{t('sidebar.emptyNoMatches')}</div>
               ) : (
                 <ul className="chat-list">
                   {visibleChats.map(chat => (
@@ -76,6 +78,7 @@ export function Sidebar() {
                   <button 
                     className="chat-item-btn"
                     onClick={() => handleSelectChat(chat.id)}
+                    aria-label={t('sidebar.selectChat')}
                   >
                     <MessageSquare size={16} className="chat-icon" />
                     <span className="chat-title" title={chat.title}>{chat.title}</span>
@@ -86,7 +89,7 @@ export function Sidebar() {
                       e.stopPropagation();
                       deleteChat(chat.id);
                     }}
-                    aria-label="Delete chat"
+                    aria-label={t('sidebar.deleteChat')}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -101,7 +104,7 @@ export function Sidebar() {
         <div className="sidebar-footer">
           <button className="settings-btn" onClick={openSettings}>
             <Settings size={20} />
-            <span>Settings</span>
+            <span>{t('sidebar.settings')}</span>
           </button>
         </div>
       </aside>

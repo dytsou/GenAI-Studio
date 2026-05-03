@@ -4,10 +4,24 @@ A local-first AI chat workspace built with React + TypeScript + Vite.
 
 It supports streaming chat completions, multi-chat history, attachments (images/PDF), structured JSON output mode with schema editing, and GitHub Pages deployment through a single CI/CD workflow.
 
+**Architecture, deployment modes (diagram):** [docs/system-overview.md](docs/system-overview.md)
+
+## How to configure (overview)
+
+Pick **one** path and follow its section:
+
+| Goal                                                                                                                                                       | Follow                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Use your API key in the browser and call OpenAI-compat **`/chat/completions` directly**                                                                    | [Mode A: Direct upstream](#mode-a-direct-upstream-spa-only) |
+| Proxy through the repo **hosted gateway** (recommended for **voice transcribe**, **long-term memory** via Postgres, **tools inventory**, Intelligent mode) | [Mode B: Hosted gateway](#mode-b-hosted-gateway)            |
+
+Gateway-specific env vars live in **`deploy/.env.example`** (copy to **`deploy/.env`** when customizing Compose). Memory behavior parity is summarized in **`deploy/PARITY.md`**.
+
 ## Features
 
 - Multi-chat sidebar with create, search, switch, and delete.
 - Streaming assistant responses (`/chat/completions` SSE-style chunks).
+- Hosted gateway **memory selection drawer** (when gateway is enabled): preview retrieved candidates, semantic-search memory, and manually include/exclude chunks per send; assistant replies show a “Memory used” disclosure.
 - Assistant messages rendered as **Markdown** (GFM) with **HTML sanitization** for safe display.
 - Attachment support:
   - Images (up to 20MB each)
@@ -17,6 +31,7 @@ It supports streaming chat completions, multi-chat history, attachments (images/
   - Model
   - Temperature / Top P / Max Tokens
   - Global system prompt
+  - Optional **hosted gateway**: enable, set gateway base URL, intelligent mode, memory / tools (see [deploy/README.md](deploy/README.md))
 - Per-message system prompt override in composer.
 - Structured output mode:
   - Build JSON schema fields in UI
@@ -28,6 +43,8 @@ It supports streaming chat completions, multi-chat history, attachments (images/
 
 ## Tech Stack
 
+### SPA (`src/`)
+
 - React 19
 - TypeScript
 - Vite 8
@@ -35,10 +52,17 @@ It supports streaming chat completions, multi-chat history, attachments (images/
 - Vitest
 - ESLint
 - pnpm
-- **react-markdown** + **remark-gfm** (message rendering)
-- **dompurify** (sanitized HTML in messages)
-- **pdfjs-dist** (PDF processing)
-- **lucide-react** (icons)
+- react-markdown + remark-gfm (message rendering)
+- dompurify (sanitized HTML in messages)
+- pdfjs-dist (PDF processing)
+- lucide-react (icons)
+
+### Hosted gateway (`deploy/gateway`, optional)
+
+- Node.js, TypeScript, Express, CORS, Multer
+- `pg` + Postgres (memory + embeddings)
+- Vitest + Supertest; `tsx` for gateway dev ([Hosted gateway (optional)](#hosted-gateway-optional))
+- Runs with Postgres via Docker Compose under `deploy/` ([deploy/README.md](deploy/README.md))
 
 ## Project Structure
 
@@ -65,6 +89,7 @@ src/
 
 - Node.js 20+
 - pnpm 10+
+- Docker
 
 ## Getting Started
 
@@ -74,18 +99,99 @@ src/
 pnpm install
 ```
 
-2. Start development server:
+2. Choose a configuration mode:
+
+### Mode A: Direct upstream (SPA only)
+
+Use this when you **do not** run the gateway.
+
+1. Start the SPA:
 
 ```bash
 pnpm dev
 ```
 
-3. Open the local URL shown by Vite (typically `http://localhost:5173`).
+2. Open the URL Vite prints (usually **`http://localhost:5173`**).
 
-4. Configure settings in-app:
-   - Open **Settings**
-   - Set API key and model config (use the eye control next to URL/key to **hold and reveal** when needed)
-   - Save configuration
+3. Open **Settings** in the app and set:
+   - **API Base URL** (default `https://api.openai.com/v1`)
+   - **API key** — use eye button to peek
+   - **Model** / temperature / other options
+   - Leave **Use hosted gateway** **off**.
+
+4. Save.
+
+### Mode B: Hosted gateway
+
+Use this when you want **`POST …/v1/chat`** / **`POST …/v1/intelligent/chat`**, **Postgres-backed memory**, **`POST …/v1/transcribe`**, or **tools**.
+
+1. Generate local env files (recommended)
+
+```bash
+pnpm run setup:dev
+```
+
+This writes:
+
+- root **`.env`** (ignored by git): Vite dev-proxy defaults + a generated bearer token
+- **`deploy/.env`** (ignored by git): Compose overrides + the same generated bearer token
+
+2. Run gateway + Postgres with Docker Compose (recommended)
+
+From the **`deploy`** directory:
+
+```bash
+cd deploy
+docker compose up --build
+```
+
+This starts:
+
+- **Gateway** on **`127.0.0.1:8080`**
+- **Postgres** on **`127.0.0.1:5433`** → **`5432`** in the container (schema from **`deploy/postgres/init.sql`**)
+
+Gateway’s `DATABASE_URL` is already wired inside Compose to `postgres://postgres:postgres@postgres:5432/studio` (the internal service DNS name).
+
+To customize gateway env vars, copy **`deploy/.env.example`** → **`deploy/.env`** and edit (examples: `ALLOWED_ORIGINS`, `ALLOWED_UPSTREAM_ORIGINS`, `MEMORY_CHAT_SAVE_STRATEGY`, `TOOLS_JSON`, `MCP_TOOLS_JSON`).
+
+This repo’s recommended workflow is to **always run the gateway via Docker Compose** (no local `pnpm dev` gateway path in the README).
+
+If the DB already existed with another password and you see auth failures, reset volumes (⚠ destroys DB data):
+
+```bash
+cd deploy
+docker compose down -v
+docker compose up --build
+```
+
+1. SPA settings (must match gateway auth model)
+
+Still from repo root **`pnpm dev`**, open **Settings** and configure:
+
+| App setting                             | Effect                                                                                                                                                                                                      |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Use hosted gateway**                  | ON                                                                                                                                                                                                          |
+| **Gateway base URL**                    | `http://127.0.0.1:8080` unless you mapped another port/host                                                                                                                                                 |
+| **API Base URL / key**                  | Still required: gateway receives **`Authorization: Bearer …`** and **`X-Upstream-Base-Url`** from the SPA. Point them at **your OpenAI-compat upstream** (`https://api.openai.com/v1` or your LiteLLM URL). |
+| **Intelligent mode**                    | Uses **`/v1/intelligent/chat`**; leave off for standard **`/v1/chat`**.                                                                                                                                     |
+| **Long-term memory** / **Memory top K** | Sends **`X-Memory-Enabled`** / **`X-Memory-Top-K`** (Postgres must be up and **`DATABASE_URL`** set on gateway).                                                                                            |
+| **Tools**                               | **`X-Tools-Enabled`** (plus gateway **`TOOLS_JSON`** / **`MCP_TOOLS_JSON`** if you use inventory).                                                                                                          |
+| Intelligent memory toggles              | Only when Intelligent is on: session/global/reveal → **`X-Studio-Intelligent-*`** headers.                                                                                                                  |
+
+`X-Workspace-Id` is generated once per browser and persisted (required for Intelligent and for **409 workspace_busy** locking).
+
+#### Memory selection drawer (Composer)
+
+When **Use hosted gateway** is ON, the Composer shows a **Memory** button:
+
+- With an **empty search box**, it shows **Candidates**: the gateway’s top‑K retrieved chunks for your current draft.
+- When you **enter a query** and run search, it shows **Search results**: semantic search across stored `memory_chunks`. Clear the query to return to Candidates.
+- Click a chunk row to cycle: **include → exclude → neutral**.
+- On send, the app forwards your selection as `memory_override` (Intelligent mode) and the assistant reply shows a **“Memory used”** disclosure with the injected chunk IDs.
+
+---
+
+**After either mode**, use **Settings → Save** so Zustand persists values to local storage.
 
 ## Available Scripts
 
@@ -94,6 +200,36 @@ pnpm dev
 - `pnpm preview` - preview built output
 - `pnpm lint` - run ESLint
 - `pnpm test` - run Vitest tests
+
+### Hosted gateway (optional)
+
+The Express gateway under **`deploy/gateway`** is its **own** pnpm package (not installed by root `pnpm install`).
+
+Developer commands (`build`, Vitest suites, Postgres runtime harness):
+
+```bash
+cd deploy/gateway
+pnpm install
+pnpm dev
+pnpm run build
+pnpm test                 # unit (excludes *.e2e / *.runtime.e2e)
+pnpm run test:e2e          # HTTP harness (mocked upstream)
+pnpm run test:e2e:runtime  # requires DATABASE_URL, e.g. host → 5433 (see deploy/README.md)
+pnpm run test:all          # unit + e2e + runtime (runtime skips if DATABASE_URL unset)
+```
+
+More Compose / hardening detail: **[deploy/README.md](deploy/README.md)**. Standard **`/v1/chat`** persistence vs Intelligent tables: **[deploy/PARITY.md](deploy/PARITY.md)**.
+
+Gateway env templates: **[deploy/.env.example](deploy/.env.example)**.
+
+#### Gateway env cheatsheet (Compose file vs host dev)
+
+| Variable                        | Typical host dev (`pnpm dev` in gateway)             | Docker Compose gateway service                          |
+| ------------------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| **`DATABASE_URL`**              | `postgres://postgres:postgres@127.0.0.1:5433/studio` | Already set to `@postgres:5432` in `docker-compose.yml` |
+| **`PORT`**                      | `8080`                                               | `8080`                                                  |
+| **`EMBEDDING_MODEL`**           | `text-embedding-3-small` (default)                   | same                                                    |
+| **`MEMORY_CHAT_SAVE_STRATEGY`** | `facts` (default) or `verbatim` rollback             | configure in `deploy/.env` or compose `environment`     |
 
 ## Configuration Details
 
@@ -115,8 +251,12 @@ All settings are stored in browser local storage through Zustand persistence.
   - `baseUrl` (default: `https://api.openai.com/v1`)
   - `model` (default: `gpt-4o`)
   - `temperature`, `topP`, `maxTokens`
+  - `contextWindowTokens`, `includeStreamUsage`
   - `systemPrompt`
   - structured output mode + schema fields
+  - **Gateway:** `useHostedGateway`, `gatewayBaseUrl` (default `http://127.0.0.1:8080`), `useIntelligentMode`, `workspaceId` (auto-generated once per browser when using gateway)
+  - **Gateway features:** `memoryEnabled`, `memoryTopK` (1–16), `toolsEnabled`
+  - **Intelligent-mode headers (when intelligent is on):** `intelligentIncludeSessionMemory`, `intelligentIncludeGlobalMemory`, `intelligentRevealMemoryUi`
 
 ### Settings UI (sensitive fields)
 
@@ -126,9 +266,34 @@ All settings are stored in browser local storage through Zustand persistence.
 
 ## API Compatibility
 
+### Direct upstream (default)
+
 The app posts to:
 
 - `{baseUrl}/chat/completions` (or uses `baseUrl` directly if it already ends with `/chat/completions`)
+
+### Hosted gateway (optional)
+
+When **Use hosted gateway** is on in Settings, the SPA posts to:
+
+- `{gatewayBaseUrl}/v1/chat`, or
+- `{gatewayBaseUrl}/v1/intelligent/chat` when **Intelligent mode** is on
+
+Headers include `Authorization` (your API key), `X-Upstream-Base-Url`, `X-Workspace-Id` (stable per browser), `X-Memory-*`, `X-Tools-Enabled`, and when intelligent is on, `X-Studio-Intelligent-*` tier flags. **Intelligent** mode requires a non-empty `X-Workspace-Id` (the app sets this automatically). The gateway proxies to your configured upstream. For production lock down `ALLOWED_UPSTREAM_ORIGINS` and optional CORS origins — see [deploy/README.md](deploy/README.md).
+
+#### Gateway memory APIs
+
+When running the hosted gateway with Postgres memory enabled, the gateway also exposes:
+
+- `POST {gatewayBaseUrl}/v1/memory/candidates` — input `{ draft_text, top_k? }` → returns candidate chunks with `chunk_id`, `preview`, `tags`, `created_at`
+- `POST {gatewayBaseUrl}/v1/memory/search` — input `{ query, filters?, pagination? }` → returns `hits` + `next_cursor`
+
+Notes:
+
+- Chunk previews are **redacted and truncated** server-side (basic secret pattern redaction).
+- Tags are **allowlist labels** (no free-text values).
+
+### Request payload (both modes)
 
 Payload includes:
 
@@ -139,6 +304,10 @@ Payload includes:
 - `max_tokens`
 - `stream: true`
 - optional `response_format` (structured output mode)
+
+When using **hosted gateway + Intelligent mode**, the request may also include:
+
+- `memory_override`: `{ include_chunk_ids?: string[]; exclude_chunk_ids?: string[]; draft_hash?: string }`
 
 This works with OpenAI-compatible chat completion endpoints.
 
@@ -190,23 +359,18 @@ Single workflow file: `.github/workflows/ci.yml`
 
 ### Trigger rules
 
-- `pull_request`: run quality checks (lint/test/build)
-- `push` to `main`/`master`: run quality checks; deploy on `main`
+- `pull_request`: run quality checks (lint/test/build) **and gateway package tests**
+- `push` to `main`/`master`: same; deploy on `main`
 - `workflow_dispatch`: manual run (includes deploy path)
 
 ### Job flow
 
-1. `quality`
-   - install deps with pnpm
-   - lint
-   - test
-   - build
-2. `pages-build` (main/manual only, after quality)
-   - build with Pages base path:
-     - `pnpm build --base "/<repo-name>/"`
+1. **`quality`** — root `pnpm install` → `pnpm lint` → `pnpm test` → `pnpm build`
+2. **`gateway`** — `deploy/gateway`: `pnpm install` → build → unit tests → `test:e2e` → start Compose **Postgres** → **`test:e2e:runtime`** (real `memory_chunks` counts with mocked upstream)
+3. **`pages-build`** (`main`/manual only, after `quality` + `gateway`)
+   - `pnpm build --base "/<repo-name>/"`
    - upload `dist` artifact
-3. `deploy`
-   - deploy artifact to GitHub Pages
+4. **`deploy`** — Pages publish
 
 ## Deployment Notes (GitHub Pages)
 
@@ -229,6 +393,14 @@ If you see asset 404 errors in production (`index-*.js`, `index-*.css`), it is u
   - Usually caused by extensions (ad/privacy blockers), not app code.
 - **CI TypeScript errors for settings types**
   - Ensure tests and typed fixtures include all required fields (e.g., `systemPrompt`).
+- **Gateway / browser blocks the request (CORS or mixed content)**
+  - The bundled gateway enables CORS with `origin: true` so the requesting origin is echoed (fine for dev and same-site setups). Lock this down in production behind your reverse proxy or by tightening gateway CORS if you expose it publicly — see [deploy/README.md](deploy/README.md).
+  - Set **`ALLOWED_ORIGINS`** on the gateway to comma-separated SPA origins when you tighten CORS (e.g. GitHub Pages + local dev origins).
+  - **HTTPS Pages + HTTP local gateway:** the browser treats that as mixed content (`http://…` blocked from an `https://…` page). Use TLS on the gateway, a tunnel with HTTPS, or run the SPA over HTTP locally when testing against a local gateway.
+- **`password authentication failed` when running `pnpm run test:e2e:runtime`** (gateway)
+  - Your Postgres volume may predate **`deploy/docker-compose.yml`** credentials. From **`deploy/`**: `docker compose down -v` then `docker compose up -d postgres`, then rerun with **`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5433/studio`** (see [deploy/README.md](deploy/README.md)).
+- **Memory never persists on standard `/v1/chat`**
+  - SPA: enable long-term memory; gateway: **`DATABASE_URL`** must be reachable; embeddings must succeed against **`X-Upstream-Base-Url`** embeddings route. **`MEMORY_CHAT_SAVE_STRATEGY=facts`** can skip noisy turns (normal); use **`verbatim`** only if you intentionally want whole-reply storage — see **`deploy/PARITY.md`**.
 
 ## Security Notes
 
